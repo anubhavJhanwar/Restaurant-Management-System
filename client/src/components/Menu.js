@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Plus, Upload, Download, Edit3, Trash2 } from 'lucide-react';
+import { ShoppingCart, Plus, Upload, Download, Edit3, Trash2, Camera, X } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import io from 'socket.io-client';
@@ -17,7 +17,12 @@ const Menu = () => {
     name: '',
     price: '',
     category: '',
-    ingredients: []
+    ingredients: [],
+    image: null,
+    imagePreview: null,
+    buns: 0,
+    patties: 0,
+    selectedPattyType: ''
   });
   const [newIngredient, setNewIngredient] = useState({ name: '', quantity: '' });
 
@@ -130,34 +135,85 @@ const Menu = () => {
     }).format(value);
   };
 
+  // Auto-add buns and patties when burger category is selected
+  const addBurgerIngredients = () => {
+    const updatedIngredients = [...newMenuItem.ingredients];
+    
+    // Remove existing buns and patties
+    const filteredIngredients = updatedIngredients.filter(
+      ing => !ing.name.toLowerCase().includes('bun') && !ing.name.toLowerCase().includes('patty')
+    );
+    
+    // Add new buns if quantity > 0
+    if (newMenuItem.buns > 0) {
+      filteredIngredients.push({
+        name: 'Burger Buns',
+        quantity: newMenuItem.buns
+      });
+    }
+    
+    // Add selected patty type if both type and quantity are specified
+    if (newMenuItem.patties > 0 && newMenuItem.selectedPattyType) {
+      filteredIngredients.push({
+        name: newMenuItem.selectedPattyType,
+        quantity: newMenuItem.patties
+      });
+    }
+    
+    setNewMenuItem({
+      ...newMenuItem,
+      ingredients: filteredIngredients
+    });
+  };
+
+  // Update ingredients when buns/patties change
+  useEffect(() => {
+    if (newMenuItem.category === 'Burger') {
+      addBurgerIngredients();
+    }
+  }, [newMenuItem.buns, newMenuItem.patties, newMenuItem.selectedPattyType]);
+
   const handleAddMenuItem = async (e) => {
     e.preventDefault();
     
     try {
+      const formData = new FormData();
+      formData.append('name', newMenuItem.name);
+      formData.append('price', parseFloat(newMenuItem.price));
+      formData.append('category', newMenuItem.category);
+      formData.append('ingredients', JSON.stringify(newMenuItem.ingredients));
+      
+      if (newMenuItem.image) {
+        formData.append('image', newMenuItem.image);
+      }
+
       const response = await fetch('http://localhost:5000/api/menu', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...newMenuItem,
-          price: parseFloat(newMenuItem.price)
-        }),
+        body: formData,
       });
 
       if (response.ok) {
         setShowAddModal(false);
-        setNewMenuItem({
-          name: '',
-          price: '',
-          category: '',
-          ingredients: []
-        });
+        resetForm();
         fetchMenuItems();
       }
     } catch (error) {
       console.error('Error adding menu item:', error);
     }
+  };
+
+  const resetForm = () => {
+    setNewMenuItem({
+      name: '',
+      price: '',
+      category: '',
+      ingredients: [],
+      image: null,
+      imagePreview: null,
+      buns: 0,
+      patties: 0,
+      selectedPattyType: ''
+    });
   };
 
   const addIngredient = () => {
@@ -270,11 +326,35 @@ const Menu = () => {
 
   const editMenuItem = (item) => {
     setEditingItem(item);
+    
+    // Extract buns and patty info from existing ingredients
+    let extractedBuns = 0;
+    let extractedPatties = 0;
+    let extractedPattyType = '';
+    
+    const otherIngredients = item.ingredients.filter(ing => {
+      if (ing.name.toLowerCase().includes('bun')) {
+        extractedBuns = ing.quantity;
+        return false;
+      }
+      if (ing.name.toLowerCase().includes('patty')) {
+        extractedPatties = ing.quantity;
+        extractedPattyType = ing.name;
+        return false;
+      }
+      return true;
+    });
+    
     setNewMenuItem({
       name: item.name,
       price: item.price.toString(),
       category: item.category,
-      ingredients: [...item.ingredients]
+      ingredients: [...otherIngredients],
+      image: null,
+      imagePreview: item.image_url || null,
+      buns: extractedBuns,
+      patties: extractedPatties,
+      selectedPattyType: extractedPattyType
     });
     setShowEditModal(true);
   };
@@ -283,30 +363,70 @@ const Menu = () => {
     e.preventDefault();
     
     try {
-      const response = await fetch(`http://localhost:5000/api/menu/${editingItem.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...newMenuItem,
-          price: parseFloat(newMenuItem.price)
-        }),
-      });
+      console.log('Updating menu item:', editingItem.id);
+      console.log('New data:', newMenuItem);
+      
+      // Validate required fields
+      if (!newMenuItem.name || !newMenuItem.price || !newMenuItem.category) {
+        alert('Please fill in all required fields (name, price, category)');
+        return;
+      }
+      
+      if (newMenuItem.image) {
+        // If there's an image, use FormData
+        const formData = new FormData();
+        formData.append('name', newMenuItem.name.trim());
+        formData.append('price', parseFloat(newMenuItem.price));
+        formData.append('category', newMenuItem.category);
+        formData.append('ingredients', JSON.stringify(newMenuItem.ingredients));
+        formData.append('image', newMenuItem.image);
 
-      if (response.ok) {
-        setShowEditModal(false);
-        setEditingItem(null);
-        setNewMenuItem({
-          name: '',
-          price: '',
-          category: '',
-          ingredients: []
+        const response = await fetch(`http://localhost:5000/api/menu/${editingItem.id}`, {
+          method: 'PUT',
+          body: formData,
         });
-        fetchMenuItems();
+
+        if (response.ok) {
+          console.log('Update successful');
+          setShowEditModal(false);
+          setEditingItem(null);
+          resetForm();
+          fetchMenuItems();
+        } else {
+          const errorData = await response.json();
+          console.error('Update failed:', errorData);
+          alert('Failed to update menu item: ' + (errorData.error || 'Unknown error'));
+        }
+      } else {
+        // If no image, use JSON
+        const response = await fetch(`http://localhost:5000/api/menu/${editingItem.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: newMenuItem.name.trim(),
+            price: parseFloat(newMenuItem.price),
+            category: newMenuItem.category,
+            ingredients: newMenuItem.ingredients
+          }),
+        });
+
+        if (response.ok) {
+          console.log('Update successful');
+          setShowEditModal(false);
+          setEditingItem(null);
+          resetForm();
+          fetchMenuItems();
+        } else {
+          const errorData = await response.json();
+          console.error('Update failed:', errorData);
+          alert('Failed to update menu item: ' + (errorData.error || 'Unknown error'));
+        }
       }
     } catch (error) {
       console.error('Error updating menu item:', error);
+      alert('Error updating menu item: ' + error.message);
     }
   };
 
@@ -339,7 +459,7 @@ const Menu = () => {
         <h1 className="menu-title">Menu & Recipe Management</h1>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <div style={{ fontSize: '14px', color: '#666', textAlign: 'right' }}>
-            Define detailed recipes with exact ingredient quantities
+            Upload photos and define recipes with exact ingredient quantities
             <br />
             <span style={{ fontSize: '12px' }}>Inventory will auto-sync when orders are placed</span>
           </div>
@@ -432,6 +552,27 @@ const Menu = () => {
           
           return (
             <div key={item.id} className="menu-card">
+              {/* Menu Item Image */}
+              {item.image_url && (
+                <div style={{
+                  width: '100%',
+                  height: '200px',
+                  marginBottom: '15px',
+                  borderRadius: '8px',
+                  overflow: 'hidden'
+                }}>
+                  <img 
+                    src={item.image_url} 
+                    alt={item.name}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                  />
+                </div>
+              )}
+              
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                 <div style={{ flex: 1 }}>
                   <div className="menu-item-name">{item.name}</div>
@@ -578,81 +719,10 @@ const Menu = () => {
         })}
       </div>
 
-      {showOrderModal && selectedItem && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2 className="modal-title">Place Order</h2>
-            
-            <div style={{ marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '18px', marginBottom: '8px' }}>{selectedItem.name}</h3>
-              <p style={{ color: '#666', marginBottom: '12px' }}>
-                {formatCurrency(selectedItem.price)} per serving
-              </p>
-              
-              <div className="form-group">
-                <label className="form-label">Quantity</label>
-                <input
-                  type="number"
-                  min="1"
-                  max={getMaxQuantity(selectedItem)}
-                  value={orderQuantity}
-                  onChange={(e) => setOrderQuantity(parseInt(e.target.value))}
-                  className="form-input"
-                />
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  Maximum available: {getMaxQuantity(selectedItem)} servings
-                </div>
-              </div>
-
-              <div style={{
-                padding: '16px',
-                backgroundColor: '#f8f9fa',
-                borderRadius: '8px',
-                marginTop: '16px'
-              }}>
-                <div style={{ fontWeight: '600', marginBottom: '8px' }}>Order Summary:</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span>{selectedItem.name} x {orderQuantity}</span>
-                  <span>{formatCurrency(selectedItem.price * orderQuantity)}</span>
-                </div>
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  fontWeight: '600',
-                  borderTop: '1px solid #ddd',
-                  paddingTop: '8px',
-                  marginTop: '8px'
-                }}>
-                  <span>Total:</span>
-                  <span>{formatCurrency(selectedItem.price * orderQuantity)}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="form-actions">
-              <button 
-                type="button" 
-                className="btn-secondary"
-                onClick={() => setShowOrderModal(false)}
-              >
-                Cancel
-              </button>
-              <button 
-                type="button" 
-                className="btn-primary"
-                onClick={processOrder}
-              >
-                Process Order
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Add Menu Item Modal */}
       {showAddModal && (
         <div className="modal-overlay">
-          <div className="modal">
+          <div className="modal" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h2 className="modal-title">Add New Menu Item & Recipe</h2>
             <div style={{ 
               backgroundColor: '#f0f9ff', 
@@ -662,11 +732,10 @@ const Menu = () => {
               border: '1px solid #bfdbfe'
             }}>
               <div style={{ fontSize: '14px', color: '#1e40af', fontWeight: '500', marginBottom: '4px' }}>
-                💡 Recipe System
+                📸 Enhanced Recipe System
               </div>
               <div style={{ fontSize: '12px', color: '#1e40af' }}>
-                Define exactly how many pieces/units of each ingredient this menu item uses. 
-                When orders are placed, inventory will automatically decrease based on these quantities.
+                Upload photos and define exact ingredient quantities. For burgers, specify buns and patties for quick setup.
               </div>
             </div>
             
@@ -703,164 +772,187 @@ const Menu = () => {
                   required
                 >
                   <option value="">Select category</option>
-                  <option value="Burgers">Burgers</option>
+                  <option value="Burger">Burger</option>
+                  <option value="Fries">Fries</option>
+                  <option value="Wrap">Wrap</option>
+                  <option value="Shakes">Shakes</option>
+                  <option value="Pizza">Pizza</option>
                   <option value="Sides">Sides</option>
-                  <option value="Drinks">Drinks</option>
-                  <option value="Desserts">Desserts</option>
-                  <option value="Salads">Salads</option>
+                  <option value="Momos">Momos</option>
+                  <option value="Mocktails">Mocktails</option>
+                  <option value="Sandwiches">Sandwiches</option>
+                  <option value="Subs">Subs</option>
                 </select>
               </div>
 
+              {/* Photo Upload Section */}
               <div className="form-group">
-                <label className="form-label">Recipe Ingredients (Exact Quantities)</label>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                  <select
-                    value={newIngredient.name}
-                    onChange={(e) => setNewIngredient({...newIngredient, name: e.target.value})}
-                    className="form-input"
-                    style={{ flex: 2 }}
-                  >
-                    <option value="">Select ingredient</option>
-                    {inventory.map(item => (
-                      <option key={item.id} value={item.name}>{item.name}</option>
-                    ))}
-                  </select>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="Qty"
-                      value={newIngredient.quantity}
-                      onChange={(e) => setNewIngredient({...newIngredient, quantity: e.target.value})}
-                      className="form-input"
-                      style={{ flex: 1 }}
-                    />
-                    <span style={{ fontSize: '12px', color: '#666', minWidth: '40px' }}>
-                      {newIngredient.name ? 
-                        inventory.find(item => item.name === newIngredient.name)?.unit || 'units' 
-                        : 'units'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addIngredient}
-                    style={{
-                      backgroundColor: '#9C928C',
-                      color: 'white',
-                      border: 'none',
-                      padding: '8px 16px',
-                      borderRadius: '6px',
-                      cursor: 'pointer'
+                <label className="form-label">Menu Item Photo</label>
+                <div style={{
+                  border: '2px dashed #ff8c42',
+                  borderRadius: '8px',
+                  padding: '20px',
+                  textAlign: 'center',
+                  backgroundColor: '#fff5f0',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+                onClick={() => document.getElementById('photo-upload').click()}
+                >
+                  <input
+                    id="photo-upload"
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                          setNewMenuItem({
+                            ...newMenuItem,
+                            image: file,
+                            imagePreview: e.target.result
+                          });
+                        };
+                        reader.readAsDataURL(file);
+                      }
                     }}
-                  >
-                    Add
-                  </button>
-                </div>
-                
-                <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
-                  {newMenuItem.ingredients.map((ingredient, index) => (
-                    <div key={index} style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '12px',
-                      backgroundColor: '#f0f9ff',
-                      borderRadius: '8px',
-                      marginBottom: '8px',
-                      border: '1px solid #bfdbfe'
-                    }}>
-                      <div>
-                        <div style={{ fontWeight: '600', color: '#1e40af' }}>{ingredient.name}</div>
-                        <div style={{ fontSize: '12px', color: '#666' }}>
-                          Uses: {ingredient.quantity} {inventory.find(item => item.name === ingredient.name)?.unit || 'units'}
-                        </div>
-                      </div>
+                  />
+                  
+                  {newMenuItem.imagePreview ? (
+                    <div style={{ position: 'relative' }}>
+                      <img 
+                        src={newMenuItem.imagePreview} 
+                        alt="Preview" 
+                        style={{
+                          width: '150px',
+                          height: '150px',
+                          objectFit: 'cover',
+                          borderRadius: '8px',
+                          marginBottom: '10px'
+                        }}
+                      />
                       <button
                         type="button"
-                        onClick={() => removeIngredient(index)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewMenuItem({
+                            ...newMenuItem,
+                            image: null,
+                            imagePreview: null
+                          });
+                        }}
                         style={{
+                          position: 'absolute',
+                          top: '5px',
+                          right: '5px',
                           backgroundColor: '#ef4444',
                           color: 'white',
                           border: 'none',
-                          padding: '6px 12px',
-                          borderRadius: '6px',
+                          borderRadius: '50%',
+                          width: '25px',
+                          height: '25px',
                           cursor: 'pointer',
-                          fontSize: '12px'
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
                         }}
                       >
-                        Remove
+                        <X size={14} />
                       </button>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        Click to change photo
+                      </div>
                     </div>
-                  ))}
+                  ) : (
+                    <div>
+                      <Camera size={48} style={{ color: '#ff8c42', marginBottom: '10px' }} />
+                      <div style={{ color: '#ff8c42', fontWeight: '500', marginBottom: '5px' }}>
+                        Upload Menu Photo
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        Click to select an image (JPG, PNG, GIF)
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="form-actions">
-                <button 
-                  type="button" 
-                  className="btn-secondary"
-                  onClick={() => setShowAddModal(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary">
-                  Add Menu Item
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+              {/* Burger Specific Ingredients */}
+              {newMenuItem.category === 'Burger' && (
+                <div className="form-group">
+                  <label className="form-label">🍔 Burger Components</label>
+                  <div style={{
+                    backgroundColor: '#fff5f0',
+                    padding: '15px',
+                    borderRadius: '8px',
+                    border: '1px solid #ff8c42',
+                    marginBottom: '15px'
+                  }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500', color: '#333' }}>
+                          🍞 Number of Buns
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={newMenuItem.buns}
+                          onChange={(e) => setNewMenuItem({...newMenuItem, buns: parseInt(e.target.value) || 0})}
+                          className="form-input"
+                          placeholder="e.g., 1 for regular, 2 for double"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', fontWeight: '500', color: '#333' }}>
+                          🥩 Patty Type & Quantity
+                        </label>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <select
+                            value={newMenuItem.selectedPattyType || ''}
+                            onChange={(e) => setNewMenuItem({...newMenuItem, selectedPattyType: e.target.value})}
+                            className="form-input"
+                            style={{ flex: 2 }}
+                          >
+                            <option value="">Select Patty Type</option>
+                            {inventory
+                              .filter(item => item.name.toLowerCase().includes('patty'))
+                              .map(patty => (
+                                <option key={patty.id} value={patty.name}>{patty.name}</option>
+                              ))
+                            }
+                          </select>
+                          <input
+                            type="number"
+                            min="0"
+                            value={newMenuItem.patties}
+                            onChange={(e) => setNewMenuItem({...newMenuItem, patties: parseInt(e.target.value) || 0})}
+                            className="form-input"
+                            style={{ flex: 1 }}
+                            placeholder="Qty"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div style={{ 
+                      marginTop: '10px', 
+                      fontSize: '12px', 
+                      color: '#666',
+                      backgroundColor: 'white',
+                      padding: '8px',
+                      borderRadius: '4px'
+                    }}>
+                      💡 <strong>Smart Patty Selection:</strong> Choose from your inventory patty types. Buns and selected patties will be automatically added to ingredients.
+                    </div>
+                  </div>
+                </div>
+              )}
 
-      {/* Edit Menu Item Modal */}
-      {showEditModal && editingItem && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <h2 className="modal-title">Edit Recipe: {editingItem.name}</h2>
-            
-            <form onSubmit={updateMenuItem}>
               <div className="form-group">
-                <label className="form-label">Item Name</label>
-                <input
-                  type="text"
-                  value={newMenuItem.name}
-                  onChange={(e) => setNewMenuItem({...newMenuItem, name: e.target.value})}
-                  className="form-input"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Price ($)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={newMenuItem.price}
-                  onChange={(e) => setNewMenuItem({...newMenuItem, price: e.target.value})}
-                  className="form-input"
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Category</label>
-                <select
-                  value={newMenuItem.category}
-                  onChange={(e) => setNewMenuItem({...newMenuItem, category: e.target.value})}
-                  className="form-input"
-                  required
-                >
-                  <option value="">Select category</option>
-                  <option value="Burgers">Burgers</option>
-                  <option value="Sides">Sides</option>
-                  <option value="Drinks">Drinks</option>
-                  <option value="Desserts">Desserts</option>
-                  <option value="Salads">Salads</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Recipe Ingredients (Exact Quantities)</label>
+                <label className="form-label">Additional Recipe Ingredients</label>
                 <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                   <select
                     value={newIngredient.name}
@@ -948,23 +1040,325 @@ const Menu = () => {
                   type="button" 
                   className="btn-secondary"
                   onClick={() => {
-                    setShowEditModal(false);
-                    setEditingItem(null);
-                    setNewMenuItem({
-                      name: '',
-                      price: '',
-                      category: '',
-                      ingredients: []
-                    });
+                    setShowAddModal(false);
+                    resetForm();
                   }}
                 >
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary">
+                  Add Menu Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Menu Item Modal */}
+      {showEditModal && editingItem && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 className="modal-title">Edit Recipe: {editingItem.name}</h2>
+            <div style={{ 
+              backgroundColor: '#f0f9ff', 
+              padding: '12px', 
+              borderRadius: '8px', 
+              marginBottom: '20px',
+              border: '1px solid #bfdbfe'
+            }}>
+              <div style={{ fontSize: '14px', color: '#1e40af', fontWeight: '500', marginBottom: '4px' }}>
+                ✏️ Edit Recipe & Ingredients
+              </div>
+              <div style={{ fontSize: '12px', color: '#1e40af' }}>
+                Update menu item details, buns, patty types, and ingredient quantities for better inventory management.
+              </div>
+            </div>
+            
+            <form onSubmit={(e) => {
+              console.log('Form submitted for edit');
+              updateMenuItem(e);
+            }}>
+              <div className="form-group">
+                <label className="form-label">Item Name</label>
+                <input
+                  type="text"
+                  value={newMenuItem.name}
+                  onChange={(e) => setNewMenuItem({...newMenuItem, name: e.target.value})}
+                  className="form-input"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Price ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={newMenuItem.price}
+                  onChange={(e) => setNewMenuItem({...newMenuItem, price: e.target.value})}
+                  className="form-input"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Category</label>
+                <select
+                  value={newMenuItem.category}
+                  onChange={(e) => setNewMenuItem({...newMenuItem, category: e.target.value})}
+                  className="form-input"
+                  required
+                >
+                  <option value="">Select category</option>
+                  <option value="Burger">Burger</option>
+                  <option value="Fries">Fries</option>
+                  <option value="Wrap">Wrap</option>
+                  <option value="Shakes">Shakes</option>
+                  <option value="Pizza">Pizza</option>
+                  <option value="Sides">Sides</option>
+                  <option value="Momos">Momos</option>
+                  <option value="Mocktails">Mocktails</option>
+                  <option value="Sandwiches">Sandwiches</option>
+                  <option value="Subs">Subs</option>
+                </select>
+              </div>
+
+
+
+              <div className="form-group">
+                <label className="form-label">🍽️ Recipe Ingredients</label>
+                <div style={{
+                  backgroundColor: '#fff5f0',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '2px dashed #ff8c42',
+                  marginBottom: '15px'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    marginBottom: '15px',
+                    paddingBottom: '10px',
+                    borderBottom: '1px solid #ff8c42'
+                  }}>
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#ff8c42'
+                    }}>
+                      Add Ingredients & Quantities
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                    <select
+                      value={newIngredient.name}
+                      onChange={(e) => setNewIngredient({...newIngredient, name: e.target.value})}
+                      style={{ 
+                        flex: 2,
+                        border: '2px solid #ff8c42',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        fontSize: '14px',
+                        outline: 'none',
+                        backgroundColor: 'white'
+                      }}
+                    >
+                      <option value="">Select ingredient</option>
+                      {inventory.map(item => (
+                        <option key={item.id} value={item.name}>{item.name}</option>
+                      ))}
+                    </select>
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Qty"
+                        value={newIngredient.quantity}
+                        onChange={(e) => setNewIngredient({...newIngredient, quantity: e.target.value})}
+                        style={{ 
+                          flex: 1,
+                          border: '2px solid #ff8c42',
+                          borderRadius: '8px',
+                          padding: '12px',
+                          fontSize: '14px',
+                          outline: 'none',
+                          backgroundColor: 'white'
+                        }}
+                      />
+                      <span style={{ fontSize: '12px', color: '#ff8c42', fontWeight: '500', minWidth: '40px' }}>
+                        {newIngredient.name ? 
+                          inventory.find(item => item.name === newIngredient.name)?.unit || 'units' 
+                          : 'units'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addIngredient}
+                      style={{
+                        backgroundColor: '#ff8c42',
+                        color: 'white',
+                        border: 'none',
+                        padding: '12px 20px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        fontSize: '14px',
+                        transition: 'background-color 0.3s ease'
+                      }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#e67e22'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = '#ff8c42'}
+                    >
+                      Add
+                    </button>
+                  </div>
+                  
+                  <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                    {newMenuItem.ingredients.map((ingredient, index) => (
+                      <div key={index} style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '12px',
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        marginBottom: '8px',
+                        border: '2px solid #ff8c42'
+                      }}>
+                        <div>
+                          <div style={{ fontWeight: '600', color: '#ff8c42' }}>{ingredient.name}</div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>
+                            Uses: {ingredient.quantity} {inventory.find(item => item.name === ingredient.name)?.unit || 'units'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeIngredient(index)}
+                          style={{
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-actions">
+                <button 
+                  type="button" 
+                  className="btn-secondary"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditingItem(null);
+                    resetForm();
+                  }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  style={{
+                    backgroundColor: '#22c55e',
+                    color: 'white',
+                    border: 'none',
+                    padding: '12px 25px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    transition: 'background-color 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#16a34a'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = '#22c55e'}
+                >
                   Update Recipe
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Order Modal */}
+      {showOrderModal && selectedItem && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h2 className="modal-title">Place Order</h2>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '18px', marginBottom: '8px' }}>{selectedItem.name}</h3>
+              <p style={{ color: '#666', marginBottom: '12px' }}>
+                {formatCurrency(selectedItem.price)} per serving
+              </p>
+              
+              <div className="form-group">
+                <label className="form-label">Quantity</label>
+                <input
+                  type="number"
+                  min="1"
+                  max={getMaxQuantity(selectedItem)}
+                  value={orderQuantity}
+                  onChange={(e) => setOrderQuantity(parseInt(e.target.value))}
+                  className="form-input"
+                />
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                  Maximum available: {getMaxQuantity(selectedItem)} servings
+                </div>
+              </div>
+
+              <div style={{
+                padding: '16px',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '8px',
+                marginTop: '16px'
+              }}>
+                <div style={{ fontWeight: '600', marginBottom: '8px' }}>Order Summary:</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>{selectedItem.name} x {orderQuantity}</span>
+                  <span>{formatCurrency(selectedItem.price * orderQuantity)}</span>
+                </div>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  fontWeight: '600',
+                  borderTop: '1px solid #ddd',
+                  paddingTop: '8px',
+                  marginTop: '8px'
+                }}>
+                  <span>Total:</span>
+                  <span>{formatCurrency(selectedItem.price * orderQuantity)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button 
+                type="button" 
+                className="btn-secondary"
+                onClick={() => setShowOrderModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="btn-primary"
+                onClick={processOrder}
+              >
+                Process Order
+              </button>
+            </div>
           </div>
         </div>
       )}

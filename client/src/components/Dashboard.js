@@ -129,16 +129,27 @@ const Dashboard = () => {
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <div>
-          <h1 className="dashboard-title">Hello, Manager 👋</h1>
-          <p style={{ color: '#666', marginTop: '4px' }}>
-            Manage your restaurant with precision.
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <img 
+            src="/Logo Main.png" 
+            alt="BurgerBoss Logo" 
+            style={{
+              width: '60px',
+              height: 'auto',
+              borderRadius: '8px'
+            }}
+          />
+          <div>
+            <h1 className="dashboard-title">Hello, Burger Boss 👋</h1>
+            <p style={{ color: '#666', marginTop: '4px' }}>
+              Manage your restaurant with precision.
+            </p>
+          </div>
         </div>
         <div className="user-info">
-          <div className="user-avatar">M</div>
+          <div className="user-avatar">BB</div>
           <div>
-            <div style={{ fontWeight: '600' }}>Manager</div>
+            <div style={{ fontWeight: '600' }}>Burger Boss</div>
             <div style={{ fontSize: '12px', color: '#666' }}>Admin</div>
           </div>
         </div>

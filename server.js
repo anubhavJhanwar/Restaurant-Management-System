@@ -5,6 +5,8 @@ const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const multer = require('multer');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,6 +21,41 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'client/build')));
 
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+// Serve uploaded images
+app.use('/uploads', express.static(uploadsDir));
+
+// Configure multer for image uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: function (req, file, cb) {
+    // Check if file is an image
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
+
 // Initialize SQLite Database
 const db = new sqlite3.Database('./restaurant.db');
 
@@ -31,6 +68,7 @@ db.serialize(() => {
     price REAL NOT NULL,
     category TEXT NOT NULL,
     ingredients TEXT NOT NULL,
+    image_url TEXT,
     active BOOLEAN DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
@@ -356,13 +394,14 @@ app.get('/api/orders/history', (req, res) => {
 });
 
 // Add menu item
-app.post('/api/menu', (req, res) => {
+app.post('/api/menu', upload.single('image'), (req, res) => {
   const { name, price, category, ingredients } = req.body;
   const id = uuidv4();
+  const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
   
-  db.run(`INSERT INTO menu_items (id, name, price, category, ingredients) 
-          VALUES (?, ?, ?, ?, ?)`, 
-          [id, name, price, category, JSON.stringify(ingredients)], function(err) {
+  db.run(`INSERT INTO menu_items (id, name, price, category, ingredients, image_url) 
+          VALUES (?, ?, ?, ?, ?, ?)`, 
+          [id, name, price, category, ingredients, imageUrl], function(err) {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -373,23 +412,80 @@ app.post('/api/menu', (req, res) => {
   });
 });
 
-// Update menu item
+// Update menu item (with optional image)
 app.put('/api/menu/:id', (req, res) => {
-  const { id } = req.params;
-  const { name, price, category, ingredients } = req.body;
+  // Check if request has multipart data (image upload)
+  const contentType = req.headers['content-type'];
   
-  db.run(`UPDATE menu_items 
-          SET name = ?, price = ?, category = ?, ingredients = ?
-          WHERE id = ?`, 
-          [name, price, category, JSON.stringify(ingredients), id], function(err) {
-    if (err) {
-      res.status(500).json({ error: err.message });
-      return;
+  if (contentType && contentType.includes('multipart/form-data')) {
+    // Handle FormData with image
+    upload.single('image')(req, res, (err) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      
+      const { id } = req.params;
+      const { name, price, category, ingredients } = req.body;
+      const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+      
+      console.log('FormData update - name:', name, 'price:', price, 'category:', category);
+      
+      if (!name || !price || !category) {
+        return res.status(400).json({ error: 'Missing required fields: name, price, or category' });
+      }
+      
+      let query, params;
+      
+      if (imageUrl) {
+        query = `UPDATE menu_items 
+                 SET name = ?, price = ?, category = ?, ingredients = ?, image_url = ?
+                 WHERE id = ?`;
+        params = [name, price, category, ingredients, imageUrl, id];
+      } else {
+        query = `UPDATE menu_items 
+                 SET name = ?, price = ?, category = ?, ingredients = ?
+                 WHERE id = ?`;
+        params = [name, price, category, ingredients, id];
+      }
+      
+      db.run(query, params, function(err) {
+        if (err) {
+          console.error('Database error:', err);
+          res.status(500).json({ error: err.message });
+          return;
+        }
+        
+        io.emit('menu_updated');
+        res.json({ message: 'Menu item updated successfully' });
+      });
+    });
+  } else {
+    // Handle JSON data (no image)
+    const { id } = req.params;
+    const { name, price, category, ingredients } = req.body;
+    
+    console.log('JSON update - name:', name, 'price:', price, 'category:', category);
+    
+    if (!name || !price || !category) {
+      return res.status(400).json({ error: 'Missing required fields: name, price, or category' });
     }
     
-    io.emit('menu_updated');
-    res.json({ message: 'Menu item updated successfully' });
-  });
+    const query = `UPDATE menu_items 
+                   SET name = ?, price = ?, category = ?, ingredients = ?
+                   WHERE id = ?`;
+    const params = [name, price, category, JSON.stringify(ingredients), id];
+    
+    db.run(query, params, function(err) {
+      if (err) {
+        console.error('Database error:', err);
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      
+      io.emit('menu_updated');
+      res.json({ message: 'Menu item updated successfully' });
+    });
+  }
 });
 
 // Delete menu item

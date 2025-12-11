@@ -71,13 +71,13 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       <div
         style={{
           position: 'fixed',
-          left: isOpen ? '20px' : '-280px',
+          left: isOpen ? '20px' : '-260px',
           top: '20px',
           bottom: '20px',
-          width: '280px',
+          width: '260px',
           background: 'linear-gradient(135deg, #ff8c42 0%, #ff7b25 100%)',
-          borderRadius: '25px',
-          padding: '30px 20px',
+          borderRadius: '20px',
+          padding: '25px 18px',
           zIndex: 1000,
           transition: 'left 0.3s ease',
           boxShadow: '0 10px 30px rgba(255, 140, 66, 0.3)',
@@ -87,14 +87,31 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       >
         {/* Logo */}
         <div style={{
-          color: 'white',
-          fontSize: '28px',
-          fontWeight: 'bold',
-          marginBottom: '50px',
-          textAlign: 'center',
-          marginTop: '20px'
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          marginBottom: '40px',
+          marginTop: '10px'
         }}>
-          🍔 BurgerBoss
+          <img 
+            src="/Logo Main.png" 
+            alt="BurgerBoss Logo" 
+            style={{
+              width: '100px',
+              height: 'auto',
+              marginBottom: '10px',
+              borderRadius: '8px'
+            }}
+          />
+          <div style={{
+            color: 'white',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            letterSpacing: '0.5px'
+          }}>
+            BurgerBoss
+          </div>
         </div>
         
         {/* Navigation */}
@@ -112,17 +129,17 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                 }}
                 style={{
                   width: '100%',
-                  padding: '16px 20px',
-                  marginBottom: '12px',
+                  padding: '14px 18px',
+                  marginBottom: '8px',
                   backgroundColor: isActive ? 'rgba(255, 255, 255, 0.25)' : 'transparent',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '15px',
+                  borderRadius: '12px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '15px',
-                  fontSize: '16px',
+                  gap: '12px',
+                  fontSize: '15px',
                   fontWeight: '500',
                   transition: 'all 0.3s ease',
                   backdropFilter: isActive ? 'blur(10px)' : 'none',
@@ -150,14 +167,13 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
         
         {/* Footer */}
         <div style={{
-          color: 'rgba(255, 255, 255, 0.8)',
-          fontSize: '12px',
+          color: 'rgba(255, 255, 255, 0.6)',
+          fontSize: '11px',
           textAlign: 'center',
-          marginTop: '20px'
+          marginTop: 'auto',
+          paddingTop: '20px'
         }}>
-          Restaurant Management System
-          <br />
-          <span style={{ fontSize: '10px', opacity: 0.7 }}>v2.0</span>
+          <span style={{ fontSize: '10px', opacity: 0.8 }}>v2.0</span>
         </div>
       </div>
     </>

@@ -631,7 +631,17 @@ const TodaysOrders = () => {
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '500px' }}>
             <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px' }}>🍔 BurgerBoss</h2>
+              <img 
+                src="/Logo Main.png" 
+                alt="BurgerBoss Logo" 
+                style={{
+                  width: '80px',
+                  height: 'auto',
+                  marginBottom: '12px',
+                  borderRadius: '8px'
+                }}
+              />
+              <h2 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px' }}>BurgerBoss</h2>
               <p style={{ color: '#666' }}>Restaurant Bill</p>
             </div>
 

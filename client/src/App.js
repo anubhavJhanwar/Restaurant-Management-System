@@ -7,6 +7,7 @@ import Transactions from './components/Transactions';
 import Expenditures from './components/Expenditures';
 import Inventory from './components/Inventory';
 import Menu from './components/Menu';
+import Settings from './components/Settings';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -25,6 +26,8 @@ function App() {
         return <Inventory />;
       case 'menu':
         return <Menu />;
+      case 'settings':
+        return <Settings />;
       default:
         return <Dashboard />;
     }
