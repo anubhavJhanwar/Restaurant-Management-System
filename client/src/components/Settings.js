@@ -1,5 +1,183 @@
 import React, { useState, useEffect } from 'react';
-import { Save, User, Bell, Palette, Database, Shield, ChefHat, Clock } from 'lucide-react';
+import { Save, User, Bell, Palette, Database, Shield, ChefHat, Clock, Key, Settings as SettingsIcon, Users, Trash2 } from 'lucide-react';
+
+const PinChangeForm = () => {
+  const [currentPin, setCurrentPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const handlePinChange = async (e) => {
+    e.preventDefault();
+    
+    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+      setMessage('PIN must be exactly 4 digits');
+      return;
+    }
+    
+    if (newPin !== confirmPin) {
+      setMessage('New PIN and confirmation do not match');
+      return;
+    }
+    
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      const token = localStorage.getItem('token');
+      
+      // First verify current PIN
+      const verifyResponse = await fetch('http://localhost:5000/api/auth/verify-pin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ pin: currentPin })
+      });
+      
+      if (!verifyResponse.ok) {
+        setMessage('Current PIN is incorrect');
+        setLoading(false);
+        return;
+      }
+      
+      // Change PIN
+      const changeResponse = await fetch('http://localhost:5000/api/auth/change-pin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          currentPin: currentPin,
+          newPin: newPin 
+        })
+      });
+      
+      if (changeResponse.ok) {
+        setMessage('PIN changed successfully');
+        setCurrentPin('');
+        setNewPin('');
+        setConfirmPin('');
+      } else {
+        const data = await changeResponse.json();
+        setMessage(data.error || 'Failed to change PIN');
+      }
+    } catch (error) {
+      setMessage('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handlePinChange} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+      <div>
+        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', color: '#555' }}>
+          Current PIN
+        </label>
+        <input
+          type="password"
+          value={currentPin}
+          onChange={(e) => setCurrentPin(e.target.value)}
+          maxLength={4}
+          placeholder="Enter current PIN"
+          style={{
+            width: '200px',
+            padding: '12px',
+            border: '2px solid #e9ecef',
+            borderRadius: '8px',
+            fontSize: '14px',
+            outline: 'none'
+          }}
+          required
+        />
+      </div>
+      
+      <div>
+        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', color: '#555' }}>
+          New PIN
+        </label>
+        <input
+          type="password"
+          value={newPin}
+          onChange={(e) => setNewPin(e.target.value)}
+          maxLength={4}
+          placeholder="Enter new 4-digit PIN"
+          style={{
+            width: '200px',
+            padding: '12px',
+            border: '2px solid #e9ecef',
+            borderRadius: '8px',
+            fontSize: '14px',
+            outline: 'none'
+          }}
+          required
+        />
+      </div>
+      
+      <div>
+        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', color: '#555' }}>
+          Confirm New PIN
+        </label>
+        <input
+          type="password"
+          value={confirmPin}
+          onChange={(e) => setConfirmPin(e.target.value)}
+          maxLength={4}
+          placeholder="Confirm new PIN"
+          style={{
+            width: '200px',
+            padding: '12px',
+            border: '2px solid #e9ecef',
+            borderRadius: '8px',
+            fontSize: '14px',
+            outline: 'none'
+          }}
+          required
+        />
+      </div>
+      
+      {message && (
+        <div style={{
+          padding: '10px',
+          borderRadius: '6px',
+          fontSize: '14px',
+          backgroundColor: message.includes('successfully') ? '#d4edda' : '#f8d7da',
+          color: message.includes('successfully') ? '#155724' : '#721c24',
+          border: `1px solid ${message.includes('successfully') ? '#c3e6cb' : '#f5c6cb'}`
+        }}>
+          {message}
+        </div>
+      )}
+      
+      <button
+        type="submit"
+        disabled={loading}
+        style={{
+          width: '200px',
+          padding: '12px',
+          backgroundColor: loading ? '#ccc' : '#ff8c42',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontWeight: '600',
+          cursor: loading ? 'not-allowed' : 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
+        }}
+      >
+        <Key size={16} />
+        {loading ? 'Changing...' : 'Change PIN'}
+      </button>
+    </form>
+  );
+};
 
 const Settings = () => {
   const [settings, setSettings] = useState({
@@ -46,6 +224,9 @@ const Settings = () => {
 
   const [activeSection, setActiveSection] = useState('restaurant');
   const [saveMessage, setSaveMessage] = useState('');
+  const [users, setUsers] = useState([]);
+  const [userCounts, setUserCounts] = useState({ owner: 0, default: 0, total: 0 });
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Load settings from localStorage on component mount
   useEffect(() => {
@@ -70,11 +251,10 @@ const Settings = () => {
 
   const sections = [
     { id: 'restaurant', label: 'Restaurant Info', icon: User },
-    { id: 'preferences', label: 'Preferences', icon: Palette },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'business', label: 'Business', icon: Database },
-    { id: 'kitchen', label: 'Kitchen', icon: ChefHat },
-    { id: 'security', label: 'Security', icon: Shield }
+    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'users', label: 'User Management', icon: Users }
   ];
 
   const renderRestaurantSettings = () => (
@@ -387,29 +567,7 @@ const Settings = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <h3 style={{ color: '#333', marginBottom: '15px', fontSize: '18px' }}>Business Settings</h3>
       
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', color: '#555' }}>
-            Tax Rate (%)
-          </label>
-          <input
-            type="number"
-            step="0.1"
-            value={settings.taxRate}
-            onChange={(e) => handleInputChange('taxRate', parseFloat(e.target.value))}
-            style={{
-              width: '100%',
-              padding: '12px',
-              border: '2px solid #ff8c42',
-              borderRadius: '8px',
-              fontSize: '14px',
-              outline: 'none'
-            }}
-            onFocus={(e) => e.target.style.borderColor = '#ff7b25'}
-            onBlur={(e) => e.target.style.borderColor = '#ff8c42'}
-          />
-        </div>
-        
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
         <div>
           <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', color: '#555' }}>
             Service Charge (%)
@@ -534,25 +692,15 @@ const Settings = () => {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <h3 style={{ color: '#333', marginBottom: '15px', fontSize: '18px' }}>Security Settings</h3>
       
-      <div>
-        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500', color: '#555' }}>
-          Session Timeout (minutes)
-        </label>
-        <input
-          type="number"
-          value={settings.sessionTimeout}
-          onChange={(e) => handleInputChange('sessionTimeout', parseInt(e.target.value))}
-          style={{
-            width: '200px',
-            padding: '12px',
-            border: '2px solid #ff8c42',
-            borderRadius: '8px',
-            fontSize: '14px',
-            outline: 'none'
-          }}
-          onFocus={(e) => e.target.style.borderColor = '#ff7b25'}
-          onBlur={(e) => e.target.style.borderColor = '#ff8c42'}
-        />
+      {/* PIN Change Section */}
+      <div style={{
+        padding: '20px',
+        backgroundColor: '#fff5f0',
+        borderRadius: '8px',
+        border: '1px solid #ff8c42'
+      }}>
+        <h4 style={{ color: '#333', marginBottom: '15px', fontSize: '16px' }}>Change PIN</h4>
+        <PinChangeForm />
       </div>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
@@ -609,6 +757,248 @@ const Settings = () => {
       </div>
     </div>
   );
+
+  // User Management Functions
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/admin/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data.users);
+        setUserCounts(data.counts);
+      } else {
+        console.error('Failed to fetch users');
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const deleteUser = async (userId, username) => {
+    if (!window.confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        alert(`User "${data.deletedUser.username}" has been deleted successfully.`);
+        fetchUsers(); // Refresh the list
+      } else {
+        const error = await response.json();
+        alert(`Failed to delete user: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Error deleting user. Please try again.');
+    }
+  };
+
+  // Add useEffect for fetching users when section changes
+  useEffect(() => {
+    if (activeSection === 'users') {
+      fetchUsers();
+    }
+  }, [activeSection]);
+
+  const renderUserManagement = () => {
+    // Get current user info
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <h3 style={{ color: '#333', marginBottom: '15px', fontSize: '18px' }}>User Management</h3>
+        
+        {/* Compact Account Statistics */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(3, 1fr)', 
+          gap: '12px',
+          marginBottom: '15px'
+        }}>
+          <div style={{
+            padding: '12px',
+            backgroundColor: '#fff5f0',
+            borderRadius: '6px',
+            border: '1px solid #ff8c42',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#ff8c42' }}>
+              {userCounts.owner}/3
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>Owners</div>
+          </div>
+          
+          <div style={{
+            padding: '12px',
+            backgroundColor: '#f0f8ff',
+            borderRadius: '6px',
+            border: '1px solid #3b82f6',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#3b82f6' }}>
+              {userCounts.default}/2
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>Default</div>
+          </div>
+          
+          <div style={{
+            padding: '12px',
+            backgroundColor: '#f0fdf4',
+            borderRadius: '6px',
+            border: '1px solid #22c55e',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#22c55e' }}>
+              {userCounts.total}/5
+            </div>
+            <div style={{ fontSize: '12px', color: '#666' }}>Total</div>
+          </div>
+        </div>
+
+        {/* Compact Users List */}
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '6px',
+          border: '1px solid #e5e7eb',
+          overflow: 'hidden',
+          maxHeight: '400px'
+        }}>
+          <div style={{
+            padding: '10px 15px',
+            backgroundColor: '#f9fafb',
+            borderBottom: '1px solid #e5e7eb',
+            fontWeight: '600',
+            color: '#374151',
+            fontSize: '14px'
+          }}>
+            All User Accounts ({users.length})
+          </div>
+          
+          {loadingUsers ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#666', fontSize: '14px' }}>
+              Loading users...
+            </div>
+          ) : users.length === 0 ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#666', fontSize: '14px' }}>
+              No users found
+            </div>
+          ) : (
+            <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+              {users.map((user, index) => (
+                <div key={user.id} style={{
+                  padding: '10px 15px',
+                  borderBottom: index < users.length - 1 ? '1px solid #f3f4f6' : 'none',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                      <span style={{ fontWeight: '600', color: '#374151', fontSize: '14px' }}>
+                        {user.username}
+                      </span>
+                      <span style={{
+                        padding: '1px 6px',
+                        borderRadius: '10px',
+                        fontSize: '10px',
+                        fontWeight: '500',
+                        backgroundColor: user.role === 'Owner' ? '#fef3c7' : '#dbeafe',
+                        color: user.role === 'Owner' ? '#92400e' : '#1e40af'
+                      }}>
+                        {user.role}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '1px' }}>
+                      {user.email}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#9ca3af' }}>
+                      {new Date(user.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  
+                  {user.id === currentUser.id ? (
+                    <div style={{
+                      padding: '6px 10px',
+                      backgroundColor: '#f0f9ff',
+                      color: '#0369a1',
+                      border: '1px solid #bae6fd',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <User size={12} />
+                      Me
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => deleteUser(user.id, user.username)}
+                      style={{
+                        padding: '6px 10px',
+                        backgroundColor: '#fee2e2',
+                        color: '#dc2626',
+                        border: '1px solid #fecaca',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = '#fecaca';
+                        e.target.style.borderColor = '#f87171';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = '#fee2e2';
+                        e.target.style.borderColor = '#fecaca';
+                      }}
+                    >
+                      <Trash2 size={12} />
+                      Delete
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        
+        <div style={{
+          padding: '10px',
+          backgroundColor: '#f0f9ff',
+          borderRadius: '6px',
+          border: '1px solid #0ea5e9',
+          fontSize: '12px',
+          color: '#0c4a6e'
+        }}>
+          <strong>Note:</strong> Create accounts from login page. Deletions are permanent.
+        </div>
+      </div>
+    );
+  };
 
   const renderKitchenSettings = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -716,56 +1106,61 @@ const Settings = () => {
   const renderContent = () => {
     switch (activeSection) {
       case 'restaurant': return renderRestaurantSettings();
-      case 'preferences': return renderPreferences();
       case 'notifications': return renderNotifications();
       case 'business': return renderBusinessSettings();
-      case 'kitchen': return renderKitchenSettings();
       case 'security': return renderSecuritySettings();
+      case 'users': return renderUserManagement();
       default: return renderRestaurantSettings();
     }
   };
 
   return (
     <div style={{
-      padding: '30px',
+      padding: '20px',
       backgroundColor: '#fff8f5',
-      minHeight: '100vh'
+      height: '100vh',
+      overflow: 'hidden'
     }}>
       <div style={{
-        maxWidth: '1200px',
+        maxWidth: '1400px',
         margin: '0 auto',
         backgroundColor: 'white',
-        borderRadius: '15px',
+        borderRadius: '12px',
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        height: 'calc(100vh - 40px)',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
-        {/* Header */}
+        {/* Compact Header */}
         <div style={{
           background: 'linear-gradient(135deg, #ff8c42 0%, #ff7b25 100%)',
           color: 'white',
-          padding: '25px 30px',
+          padding: '15px 25px',
           display: 'flex',
           alignItems: 'center',
-          gap: '15px'
+          gap: '12px',
+          flexShrink: 0
         }}>
-          <Settings size={28} />
+          <SettingsIcon size={24} />
           <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Settings</h1>
-            <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '14px' }}>
-              Configure your restaurant management system
+            <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>Settings</h1>
+            <p style={{ margin: '2px 0 0 0', opacity: 0.9, fontSize: '12px' }}>
+              Configure your restaurant system
             </p>
           </div>
         </div>
 
-        <div style={{ display: 'flex' }}>
-          {/* Sidebar */}
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          {/* Compact Sidebar */}
           <div style={{
-            width: '250px',
-            backgroundColor: '#fff5f0',
-            borderRight: '1px solid #ff8c42',
-            padding: '20px 0'
+            width: '220px',
+            background: 'linear-gradient(180deg, #ff8c42 0%, #ff7b25 100%)',
+            display: 'flex',
+            flexDirection: 'column',
+            flexShrink: 0
           }}>
-            {sections.map(section => {
+            {sections.map((section, index) => {
               const Icon = section.icon;
               const isActive = activeSection === section.id;
               
@@ -775,21 +1170,24 @@ const Settings = () => {
                   onClick={() => setActiveSection(section.id)}
                   style={{
                     width: '100%',
-                    padding: '15px 25px',
-                    backgroundColor: isActive ? '#ff8c42' : 'transparent',
-                    color: isActive ? 'white' : '#333',
+                    padding: '12px 20px',
+                    backgroundColor: isActive ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+                    color: 'white',
                     border: 'none',
+                    borderBottom: index < sections.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '12px',
                     fontSize: '14px',
-                    fontWeight: '500',
-                    transition: 'all 0.3s ease'
+                    fontWeight: isActive ? '600' : '500',
+                    transition: 'all 0.3s ease',
+                    textAlign: 'left',
+                    position: 'relative'
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive) {
-                      e.target.style.backgroundColor = '#e9ecef';
+                      e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -799,59 +1197,80 @@ const Settings = () => {
                   }}
                 >
                   <Icon size={18} />
-                  {section.label}
+                  <span>{section.label}</span>
+                  {isActive && (
+                    <div style={{
+                      position: 'absolute',
+                      right: '0',
+                      top: '0',
+                      bottom: '0',
+                      width: '3px',
+                      backgroundColor: 'white',
+                      borderRadius: '2px 0 0 2px'
+                    }} />
+                  )}
                 </button>
               );
             })}
           </div>
 
-          {/* Content */}
-          <div style={{ flex: 1, padding: '30px' }}>
-            {renderContent()}
+          {/* Content Area */}
+          <div style={{ 
+            flex: 1, 
+            padding: '20px', 
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{ flex: 1 }}>
+              {renderContent()}
+            </div>
             
-            {/* Save Button */}
-            <div style={{
-              marginTop: '30px',
-              paddingTop: '20px',
-              borderTop: '1px solid #e9ecef',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}>
-              <div>
+            {/* Compact Save Button */}
+            {activeSection !== 'users' && (
+              <div style={{
+                marginTop: '15px',
+                paddingTop: '15px',
+                borderTop: '1px solid #e9ecef',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: '15px',
+                flexShrink: 0
+              }}>
                 {saveMessage && (
                   <div style={{
                     color: '#28a745',
-                    fontSize: '14px',
+                    fontSize: '13px',
                     fontWeight: '500'
                   }}>
                     {saveMessage}
                   </div>
                 )}
+                <button
+                  onClick={handleSave}
+                  style={{
+                    backgroundColor: '#ff8c42',
+                    color: 'white',
+                    border: 'none',
+                    padding: '10px 20px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    transition: 'background-color 0.3s ease'
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = '#e67e22'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = '#ff8c42'}
+                >
+                  <Save size={14} />
+                  Save Settings
+                </button>
               </div>
-              <button
-                onClick={handleSave}
-                style={{
-                  backgroundColor: '#ff8c42',
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px 25px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  transition: 'background-color 0.3s ease'
-                }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = '#e67e22'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = '#ff8c42'}
-              >
-                <Save size={16} />
-                Save Settings
-              </button>
-            </div>
+            )}
           </div>
         </div>
       </div>

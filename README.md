@@ -1,98 +1,101 @@
-# 🍔 Restaurant Management System
+# 🍔 BurgerBoss - Restaurant Management System
 
-A comprehensive, real-time restaurant management system built with React, Node.js, and SQLite. Features include live analytics, inventory management, recipe management, order processing, and expenditure tracking.
+A comprehensive, real-time restaurant management system built with React, Node.js, and SQLite. Features advanced user management, role-based access control, PIN security, and complete restaurant operations management.
 
 ![Restaurant Management System](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![Node.js](https://img.shields.io/badge/Node.js-18+-green)
 ![React](https://img.shields.io/badge/React-18+-blue)
 
-## ✨ Features
+## ✨ Latest Features (v2.0)
 
-### 📊 **Real-time Dashboard**
-- Live sales analytics with interactive charts
+### 🔐 **Advanced Authentication System**
+- **Dual Account Types**: Owner accounts (with PIN) and Default accounts (no PIN)
+- **Account Limits**: Maximum 3 Owner accounts, 2 Default accounts
+- **Clean Login Flow**: Separate sign-in and signup pages with proper validation
+- **Role-Based Access**: Owners get full access, Default users get operational access
+- **PIN Security**: 4-digit PIN system for secure operations
+
+### 👥 **User Management (Owner Only)**
+- **Account Overview**: Real-time statistics showing account usage (2/3 Owners, 1/2 Default)
+- **User Administration**: View all accounts with creation dates and roles
+- **Account Deletion**: Delete any user account (except your own) with confirmation
+- **Activity Logging**: All user management actions are logged for security
+- **Self-Protection**: Cannot delete your own account for safety
+
+### 🎨 **Optimized UI/UX**
+- **Compact Sidebar**: Fixed overflow issues, perfect viewport fit
+- **Role-Based Menus**: Settings only visible to Owner accounts
+- **Professional Design**: Clean, modern interface with proper spacing
+- **Responsive Layout**: Works perfectly on all screen sizes
+- **No Annoying Alerts**: Silent operations with clean user feedback
+
+### 🔒 **Enhanced Security**
+- **PIN Operations**: Lock/unlock orders, delete operations require PIN verification
+- **Cross-PIN Support**: Any Owner/Manager PIN works for operations
+- **Rate Limiting**: Protection against brute force attacks (20 attempts per 5 minutes)
+- **JWT Authentication**: Secure token-based authentication system
+- **Activity Logging**: Complete audit trail of all user actions
+
+## 📊 Core Features
+
+### 📈 **Real-time Dashboard**
+- Live sales analytics with top-selling products display
 - Total sales and orders tracking (₹ INR currency)
 - Hourly transaction monitoring with local time
-- Sales by category bar chart
+- Professional statistics cards with color coding
 - Recent orders with payment status indicators
 
-### 📦 **Bulk Inventory Management**
-- Quick-add common restaurant ingredients
+### 📦 **Smart Inventory Management**
+- Quick-add common items: Aloo Patty, Chilli Herb Patty, Veg Patty, Paneer Patty
 - Real-time stock level monitoring with color indicators
 - Automatic inventory deduction on order processing
-- Simple 3-field system (Name, Quantity, Unit)
-- Smart stock status (Well Stocked/Medium/Low)
+- Whole number quantity inputs (no decimals)
+- Smart stock status tracking
 
-### 🍽️ **Recipe Management (Menu)**
-- Detailed recipe creation with exact ingredient quantities
-- Real-time ingredient availability checking
-- Complete CRUD operations (Create, Read, Update, Delete)
-- Excel bulk upload with template download
-- Visual recipe cards with ingredient requirements
+### 🍽️ **Advanced Order Management**
+- **Item-Specific Extras**: Each item can have its own extras (Extra Cheese Slice ₹15)
+- **Order Segregation**: Items display separately with their specific extras
+- **Payment Methods**: Cash (Offline), Online, Half Cash + Half Online
+- **Lock System**: Lock orders without PIN, unlock requires PIN
+- **Professional Bills**: Complete bill generation with order details
 
-### 📋 **Today's Orders**
-- Custom order ID format: #BBDDMMXX (BB + Date + Month + Order Number)
-- Complete order management with CRUD operations
-- Real-time payment status tracking
-- Professional order display with status indicators
-- Bill generation and printing
-
-### 💳 **Transaction Management**
-- All paid orders with advanced filtering
-- Search by order ID, items, or date ranges
-- Export to CSV functionality
-- Comprehensive transaction analytics
+### 💳 **Transaction System**
+- Complete transaction history with payment method badges
+- Advanced filtering and search capabilities
+- CSV export with payment method information
 - Real-time sync with order payments
+- Professional transaction display
 
-### 💰 **Expenditure Tracking**
-- Track all business expenses by category
-- Payment status management (Paid/Unpaid)
-- Supplier information tracking
-- Real-time expenditure analytics
-- Complete expense CRUD operations
+### 💰 **Expenditure Management**
+- Business expense tracking by category
+- Payment status management
+- No success alerts (clean UX)
+- Manual entry system (no automatic additions)
+- Complete expense analytics
 
-### 🔄 **Real-time Synchronization**
+### 🔄 **Real-time Features**
 - Socket.io integration for instant updates
 - Live inventory sync across all clients
 - Real-time order and payment updates
-- Automatic chart and analytics refresh
+- Automatic dashboard refresh
 
 ## 🚀 Technology Stack
 
 ### **Backend**
 - **Node.js** with Express.js
 - **Socket.io** for real-time communication
-- **SQLite** database with local time support
-- **UUID** for unique ID generation
-- RESTful API architecture
+- **SQLite** with proper role constraints
+- **bcryptjs** for password and PIN hashing
+- **JWT** for secure authentication
+- **Rate Limiting** for security
 
 ### **Frontend**
-- **React 18** with functional components and hooks
-- **Recharts** for interactive data visualization
+- **React 18** with hooks and functional components
 - **Lucide React** for modern icons
-- **React Dropzone** for file uploads
-- **XLSX** for Excel file processing
-- Responsive CSS Grid and Flexbox layout
-
-### **Key Libraries**
-- `socket.io-client` - Real-time client communication
-- `recharts` - Charts and data visualization
-- `xlsx` - Excel file processing
-- `react-dropzone` - Drag & drop file uploads
-- `lucide-react` - Modern icon library
-
-## 📱 System Architecture
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   React Client  │◄──►│   Express API    │◄──►│  SQLite Database│
-│   (Port 3000)   │    │   (Port 5000)    │    │   (Local File)  │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                       │
-         └───────────────────────┘
-              Socket.io
-           (Real-time Updates)
-```
+- **Professional UI** with gradient designs
+- **Responsive CSS** with proper overflow handling
+- **Role-based rendering** for different user types
 
 ## 🛠️ Installation & Setup
 
@@ -102,8 +105,8 @@ A comprehensive, real-time restaurant management system built with React, Node.j
 
 ### **1. Clone Repository**
 ```bash
-git clone https://github.com/anubhavJhanwar/Restaurant-Management-System.git
-cd Restaurant-Management-System
+git clone https://github.com/anubhavJhanwar/BurgerBoss-Restaurant-Management.git
+cd BurgerBoss-Restaurant-Management
 ```
 
 ### **2. Install Dependencies**
@@ -134,119 +137,128 @@ npm run client
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:5000
 
-## 📊 Database Schema
+## 👤 User Account System
 
-### **Core Tables**
-```sql
--- Inventory Management
-inventory (id, name, quantity, unit, created_at)
+### **Account Types**
 
--- Recipe/Menu Management  
-menu_items (id, name, price, category, ingredients, active, created_at)
+#### **Owner Accounts** (Maximum 3)
+- **Full Access**: All features including Settings and User Management
+- **PIN Required**: 4-digit PIN for secure operations
+- **Required Fields**: Username, Email, Password, PIN
+- **Capabilities**: 
+  - Create/delete user accounts
+  - Access all settings
+  - Perform all PIN-protected operations
+  - View user management dashboard
 
--- Order Processing
-orders (id, items, total_amount, status, payment_status, created_at)
+#### **Default Accounts** (Maximum 2)
+- **Operational Access**: Core restaurant features only
+- **No PIN Required**: Simple username/password login
+- **Required Fields**: Username, Password only
+- **Capabilities**:
+  - Dashboard, Orders, Transactions, Expenditures
+  - Inventory management, Recipe management
+  - Cannot access Settings or User Management
 
--- Expense Tracking
-expenditures (id, description, amount, category, payment_status, supplier, created_at)
-
--- Analytics
-sales_analytics (id, date, hour, gross_sales, net_sales, profit, transactions, created_at)
-```
-
-## 🎯 Key Features Explained
-
-### **Smart Inventory System**
-- **Bulk Management**: Add common items like "Burger Buns", "Beef Patty", "Cheese Slices"
-- **Auto-Deduction**: When orders are placed, ingredients are automatically deducted
-- **Real-time Sync**: All inventory changes update instantly across all clients
-- **Visual Indicators**: Color-coded stock levels (Green/Yellow/Red)
-
-### **Recipe Management**
-- **Detailed Recipes**: Define exact quantities (e.g., "2 Beef Patty pieces", "0.05 kg Lettuce")
-- **Availability Checking**: Real-time ingredient availability with color coding
-- **Excel Integration**: Bulk upload recipes via Excel with template download
-- **CRUD Operations**: Full create, read, update, delete functionality
-
-### **Order Processing**
-- **Custom IDs**: Format #BB121101 (BB + Day + Month + Order Number)
-- **Real-time Processing**: Instant inventory deduction and updates
-- **Payment Tracking**: Visual status indicators with colored dots
-- **Bill Generation**: Professional bill printing with order details
-
-### **Analytics & Reporting**
-- **Live Charts**: Real-time sales by category, hourly transactions
-- **Local Time**: All timestamps use your laptop's local time zone
-- **Currency**: Indian Rupees (₹) formatting throughout
-- **Export Options**: CSV export for transaction history
+### **Getting Started**
+1. **First Time Setup**: Create an Owner account via signup
+2. **Add Staff**: Owner can create Default accounts for staff
+3. **Login**: Use the clean login interface with automatic role detection
+4. **Manage Users**: Owners can view and delete accounts via Settings → User Management
 
 ## 🔧 API Endpoints
 
-### **Dashboard Analytics**
+### **Authentication**
 ```
-GET /api/dashboard/stats           # Daily sales statistics
-GET /api/dashboard/hourly-sales    # Hourly transaction data  
-GET /api/dashboard/category-sales  # Sales by category
-GET /api/dashboard/recent-orders   # Recent order activity
-```
-
-### **Inventory Management**
-```
-GET    /api/inventory              # Get all inventory items
-POST   /api/inventory              # Add new inventory item
-PUT    /api/inventory/:id          # Update inventory item
-DELETE /api/inventory/:id          # Delete inventory item
+POST /api/auth/signup-owner        # Create Owner account (max 3)
+POST /api/auth/signup-default      # Create Default account (max 2)
+POST /api/auth/owner-login         # Owner login
+POST /api/auth/default-login       # Default account login
+POST /api/auth/verify-pin          # Verify PIN for operations
+POST /api/auth/change-pin          # Change PIN (Owner only)
 ```
 
-### **Recipe/Menu Management**
+### **User Management (Owner Only)**
 ```
-GET    /api/menu                   # Get all menu items
-POST   /api/menu                   # Add new menu item
-PUT    /api/menu/:id               # Update menu item
-DELETE /api/menu/:id               # Delete menu item
-POST   /api/menu/bulk              # Bulk upload from Excel
+GET    /api/admin/users            # Get all users with counts
+DELETE /api/admin/users/:userId    # Delete user account
 ```
 
-### **Order Processing**
+### **Core Operations**
 ```
-GET    /api/orders/today           # Get today's orders
-GET    /api/orders/history         # Get order history
-POST   /api/orders                 # Create new order
-PUT    /api/orders/:id             # Update order
-DELETE /api/orders/:id             # Delete order (restores inventory)
-PUT    /api/orders/:id/payment     # Update payment status
-```
-
-### **Expenditure Tracking**
-```
-GET    /api/expenditures           # Get all expenditures
-POST   /api/expenditures           # Add new expenditure
-PUT    /api/expenditures/:id/payment # Update payment status
-DELETE /api/expenditures/:id       # Delete expenditure
-GET    /api/transactions           # Get paid transactions
+GET    /api/dashboard/stats        # Dashboard statistics
+GET    /api/dashboard/top-products # Top selling products
+GET    /api/orders/today           # Today's orders
+POST   /api/orders                 # Create order with extras
+PUT    /api/orders/:id/lock        # Lock order (no PIN required)
+POST   /api/orders/:id/unlock      # Unlock order (PIN required)
+GET    /api/inventory              # Inventory management
+GET    /api/menu                   # Recipe management
+GET    /api/transactions           # Transaction history
+GET    /api/expenditures           # Expenditure tracking
 ```
 
 ## 🎨 UI/UX Features
 
 ### **Design System**
-- **Orange Gradient Sidebar**: Modern floating design with smooth animations
-- **Professional Cards**: Clean white cards with subtle shadows
-- **Color Coding**: Consistent color scheme throughout (Orange/Green/Red)
-- **Responsive Layout**: Works on desktop, tablet, and mobile devices
+- **Orange Gradient Theme**: Professional orange (#ff8c42) color scheme
+- **Compact Sidebar**: Optimized for viewport with no overflow
+- **Role-Based UI**: Different interfaces for Owner vs Default accounts
+- **Clean Cards**: Modern white cards with subtle shadows and proper spacing
+- **Professional Typography**: Consistent fonts and sizing throughout
 
 ### **User Experience**
-- **No Annoying Alerts**: Silent operations with console logging only
-- **Real-time Updates**: Instant feedback without page refreshes
-- **Intuitive Navigation**: Clear sidebar with icon-based navigation
-- **Professional Typography**: Clean, readable fonts and spacing
+- **No Annoying Alerts**: Silent operations with clean feedback
+- **Whole Number Inputs**: Quantity fields only accept integers (1, 2, 3)
+- **Smart Navigation**: Role-based menu items (Settings only for Owners)
+- **Responsive Design**: Perfect on desktop, tablet, and mobile
+- **Professional Workflow**: Clean signup → login → dashboard flow
 
-## 🚀 Production Deployment
+## 🔒 Security Features
+
+### **Authentication Security**
+- **Password Hashing**: bcrypt with salt rounds for secure password storage
+- **PIN Encryption**: 4-digit PINs are hashed and stored securely
+- **JWT Tokens**: Secure token-based authentication with expiration
+- **Rate Limiting**: 20 attempts per 5 minutes to prevent brute force
+
+### **Access Control**
+- **Role-Based Access**: Strict separation between Owner and Default capabilities
+- **PIN Protection**: Critical operations require PIN verification
+- **Self-Protection**: Users cannot delete their own accounts
+- **Activity Logging**: Complete audit trail of all user actions
+
+### **Data Protection**
+- **Input Validation**: All inputs are validated and sanitized
+- **SQL Injection Protection**: Parameterized queries throughout
+- **CORS Configuration**: Proper cross-origin resource sharing setup
+- **Error Handling**: Secure error messages without sensitive data exposure
+
+## 📱 System Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   React Client  │◄──►│   Express API    │◄──►│  SQLite Database│
+│   (Port 3000)   │    │   (Port 5000)    │    │   (Local File)  │
+│                 │    │                  │    │                 │
+│ • Role-based UI │    │ • JWT Auth       │    │ • User accounts │
+│ • PIN entry     │    │ • Rate limiting  │    │ • Role constraints│
+│ • Real-time     │    │ • PIN verification│    │ • Activity logs │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+         │                       │
+         └───────────────────────┘
+              Socket.io
+           (Real-time Updates)
+```
+
+## 🎯 Production Deployment
 
 ### **Environment Setup**
 ```bash
 # Create production environment file
 echo "NODE_ENV=production" > .env
 echo "PORT=5000" >> .env
+echo "JWT_SECRET=your-super-secure-jwt-secret-key" >> .env
 ```
 
 ### **Build & Deploy**
@@ -260,47 +272,36 @@ cd ..
 npm start
 ```
 
-### **Docker Deployment** (Optional)
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-RUN cd client && npm ci && npm run build
-EXPOSE 5000
-CMD ["npm", "start"]
-```
-
 ## 🔍 Troubleshooting
 
 ### **Common Issues**
-1. **Port Conflicts**: Change ports in `package.json` scripts
-2. **Database Reset**: Delete `restaurant.db` file to start fresh
-3. **Socket Issues**: Ensure both servers are running on correct ports
-4. **Time Zone**: System automatically uses your laptop's local time
+1. **Login Issues**: Check if rate limit exceeded (wait 5 minutes)
+2. **Account Limits**: Maximum 3 Owners, 2 Default accounts
+3. **PIN Problems**: PINs must be exactly 4 digits
+4. **Database Issues**: Delete `restaurant.db` to reset (loses all data)
+5. **Port Conflicts**: Change ports in `package.json` scripts
 
 ### **Development Tips**
-- Use browser DevTools to monitor WebSocket connections
-- Check server console for API errors and logs
-- Database file is created automatically on first run
-- All operations are logged to console for debugging
+- Check browser console for authentication errors
+- Server logs show detailed authentication attempts
+- Database constraints prevent invalid role assignments
+- All PIN operations are logged for debugging
 
 ## 🎯 Future Enhancements
 
 ### **Immediate Roadmap**
-- [ ] Multi-restaurant chain support
-- [ ] Advanced reporting dashboard
+- [ ] Password reset functionality
+- [ ] Email notifications for account actions
+- [ ] Advanced user permissions system
+- [ ] Multi-location restaurant support
 - [ ] Mobile app (React Native)
-- [ ] Payment gateway integration
-- [ ] Staff management system
 
 ### **Advanced Features**
-- [ ] Machine Learning demand forecasting
-- [ ] Dynamic pricing optimization
-- [ ] Customer behavior analytics
-- [ ] IoT kitchen equipment integration
-- [ ] Voice ordering system
+- [ ] Two-factor authentication (2FA)
+- [ ] Advanced analytics dashboard
+- [ ] Automated backup system
+- [ ] Integration with POS systems
+- [ ] Customer loyalty program
 
 ## 🤝 Contributing
 
@@ -323,10 +324,24 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - Built with modern React and Node.js best practices
-- Inspired by real restaurant management needs
-- Designed for scalability and performance
-- Community-driven development approach
+- Designed for real restaurant management needs
+- Security-first approach with role-based access control
+- Professional UI/UX with attention to detail
+- Community-driven development
 
 ---
 
+## 🚀 Quick Start Guide
+
+1. **Clone & Install**: `git clone` → `npm install` → `cd client && npm install`
+2. **Start Development**: `npm run dev`
+3. **Create Owner Account**: Go to signup, select "Owner Account", fill all fields including PIN
+4. **Login**: Use the clean login interface
+5. **Add Staff**: Go to Settings → User Management → Create Default accounts
+6. **Start Managing**: Use Dashboard, Orders, Inventory, and other features
+
 ⭐ **Star this repository if you find it helpful!** ⭐
+
+---
+
+**BurgerBoss v2.0** - Professional Restaurant Management Made Simple

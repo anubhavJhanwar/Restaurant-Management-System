@@ -9,7 +9,7 @@ const Dashboard = () => {
     total_orders: 0
   });
   const [hourlyData, setHourlyData] = useState([]);
-  const [categoryData, setCategoryData] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [socket, setSocket] = useState(null);
 
@@ -21,21 +21,21 @@ const Dashboard = () => {
     // Fetch initial data
     fetchDashboardStats();
     fetchHourlyData();
-    fetchCategoryData();
+    fetchTopProducts();
     fetchRecentOrders();
 
     // Listen for real-time updates
     newSocket.on('new_order', () => {
       fetchDashboardStats();
       fetchHourlyData();
-      fetchCategoryData();
+      fetchTopProducts();
       fetchRecentOrders();
     });
 
     newSocket.on('sales_updated', () => {
       fetchDashboardStats();
       fetchHourlyData();
-      fetchCategoryData();
+      fetchTopProducts();
       fetchRecentOrders();
     });
 
@@ -48,50 +48,66 @@ const Dashboard = () => {
 
   const fetchDashboardStats = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/dashboard/stats');
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/dashboard/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await response.json();
-      setStats(data);
+      setStats(data || { total_sales: 0, total_orders: 0 });
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
+      setStats({ total_sales: 0, total_orders: 0 });
     }
   };
 
   const fetchHourlyData = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/dashboard/hourly-sales');
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/dashboard/hourly-sales', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await response.json();
-      setHourlyData(data);
+      setHourlyData(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching hourly data:', error);
+      setHourlyData([]);
     }
   };
 
-  const fetchCategoryData = async () => {
+  const fetchTopProducts = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/dashboard/category-sales');
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/dashboard/top-products', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await response.json();
-      
-      // Add colors to category data
-      const colors = ['#ff8c42', '#22c55e', '#3b82f6', '#f59e0b', '#8b5cf6'];
-      const categoryWithColors = data.map((item, index) => ({
-        ...item,
-        color: colors[index % colors.length],
-        value: item.sales || 0
-      }));
-      
-      setCategoryData(categoryWithColors);
+      setTopProducts(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Error fetching category data:', error);
+      console.error('Error fetching top products:', error);
+      setTopProducts([]);
     }
   };
 
   const fetchRecentOrders = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/dashboard/recent-orders');
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/dashboard/recent-orders', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       const data = await response.json();
-      setRecentOrders(data);
+      // Ensure data is always an array
+      setRecentOrders(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching recent orders:', error);
+      setRecentOrders([]); // Set empty array on error
     }
   };
 
@@ -150,7 +166,6 @@ const Dashboard = () => {
           <div className="user-avatar">BB</div>
           <div>
             <div style={{ fontWeight: '600' }}>Burger Boss</div>
-            <div style={{ fontSize: '12px', color: '#666' }}>Admin</div>
           </div>
         </div>
       </div>
@@ -223,54 +238,137 @@ const Dashboard = () => {
         </div>
 
         <div className="chart-card">
-          <h3 className="chart-title">Sales by Category</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={categoryData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="category" />
-              <YAxis tickFormatter={(value) => `₹${value}`} />
-              <Tooltip formatter={(value) => [formatCurrency(value), 'Sales']} />
-              <defs>
-                <linearGradient id="categoryGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ff8c42" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#ff8c42" stopOpacity={0.3}/>
-                </linearGradient>
-              </defs>
-              <Bar 
-                dataKey="sales" 
-                fill="url(#categoryGradient)"
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-          <div style={{ marginTop: '20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-              {categoryData.map((item, index) => (
-                <div key={index} style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
+          <h3 className="chart-title">🏆 Top Selling Products Today</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '20px' }}>
+            {topProducts.length === 0 ? (
+              <div style={{ 
+                textAlign: 'center', 
+                color: '#666', 
+                padding: '40px 20px',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '12px',
+                border: '2px dashed #e9ecef'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>📊</div>
+                <div style={{ fontSize: '16px', fontWeight: '500', marginBottom: '8px' }}>No Sales Data Yet</div>
+                <div style={{ fontSize: '14px' }}>Start taking orders to see your top products!</div>
+              </div>
+            ) : (
+              topProducts.map((product, index) => (
+                <div key={index} style={{
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  backgroundColor: '#f8f9fa',
-                  borderRadius: '6px',
-                  fontSize: '14px'
+                  padding: '16px 20px',
+                  backgroundColor: index === 0 ? '#fff5f0' : '#f8f9fa',
+                  borderRadius: '12px',
+                  border: index === 0 ? '2px solid #ff8c42' : '1px solid #e9ecef',
+                  position: 'relative',
+                  transition: 'all 0.3s ease'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{
-                      width: '8px',
-                      height: '8px',
-                      backgroundColor: '#ff8c42',
-                      borderRadius: '50%'
-                    }}></div>
-                    {item.category}
+                  {/* Rank Badge */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '-8px',
+                    left: '16px',
+                    backgroundColor: index === 0 ? '#ff8c42' : index === 1 ? '#22c55e' : index === 2 ? '#3b82f6' : '#6b7280',
+                    color: 'white',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: '700'
+                  }}>
+                    {index + 1}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: '600' }}>{formatCurrency(item.sales || 0)}</div>
-                    <div style={{ fontSize: '12px', color: '#666' }}>{item.quantity || 0} items</div>
+                  
+                  <div style={{ flex: 1, marginLeft: '16px' }}>
+                    <div style={{ 
+                      fontSize: '16px', 
+                      fontWeight: '600', 
+                      color: '#333',
+                      marginBottom: '4px'
+                    }}>
+                      {product.name}
+                    </div>
+                    <div style={{ 
+                      fontSize: '12px', 
+                      color: '#666',
+                      backgroundColor: '#e9ecef',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      display: 'inline-block'
+                    }}>
+                      {product.category}
+                    </div>
+                  </div>
+                  
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '24px',
+                    textAlign: 'center'
+                  }}>
+                    <div>
+                      <div style={{ 
+                        fontSize: '20px', 
+                        fontWeight: '700', 
+                        color: '#ff8c42'
+                      }}>
+                        {product.quantity}
+                      </div>
+                      <div style={{ 
+                        fontSize: '11px', 
+                        color: '#666',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        Sold
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div style={{ 
+                        fontSize: '16px', 
+                        fontWeight: '600', 
+                        color: '#22c55e'
+                      }}>
+                        {formatCurrency(product.sales)}
+                      </div>
+                      <div style={{ 
+                        fontSize: '11px', 
+                        color: '#666',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        Revenue
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <div style={{ 
+                        fontSize: '14px', 
+                        fontWeight: '600', 
+                        color: '#3b82f6'
+                      }}>
+                        {product.orders}
+                      </div>
+                      <div style={{ 
+                        fontSize: '11px', 
+                        color: '#666',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        Orders
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
+              ))
+            )}
           </div>
         </div>
       </div>

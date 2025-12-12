@@ -90,11 +90,13 @@ const Transactions = () => {
 
   const exportTransactions = () => {
     const csvContent = [
-      ['Order ID', 'Items', 'Amount', 'Date', 'Time'].join(','),
+      ['Order ID', 'Items', 'Amount', 'Payment Method', 'Date', 'Time'].join(','),
       ...filteredTransactions.map(transaction => [
         transaction.id.slice(-8),
         transaction.items.map(item => `${item.quantity}x ${item.name}`).join('; '),
         transaction.total_amount,
+        transaction.payment_method === 'cash' ? 'Cash' : 
+        transaction.payment_method === 'online' ? 'Online' : 'Cash+Online',
         new Date(transaction.created_at).toLocaleDateString(),
         new Date(transaction.created_at).toLocaleTimeString()
       ].join(','))
@@ -321,8 +323,20 @@ const Transactions = () => {
                     {transaction.items.map(item => `${item.quantity}x ${item.name}`).join(', ')}
                   </div>
                   
-                  <div style={{ fontSize: '12px', color: '#999' }}>
-                    {new Date(transaction.created_at).toLocaleString()}
+                  <div style={{ fontSize: '12px', color: '#999', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>{new Date(transaction.created_at).toLocaleString()}</span>
+                    <span style={{
+                      backgroundColor: transaction.payment_method === 'cash' ? '#22c55e' : 
+                                     transaction.payment_method === 'online' ? '#3b82f6' : '#f59e0b',
+                      color: 'white',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontWeight: '600'
+                    }}>
+                      {transaction.payment_method === 'cash' ? 'CASH' : 
+                       transaction.payment_method === 'online' ? 'ONLINE' : 'CASH+ONLINE'}
+                    </span>
                   </div>
                 </div>
 

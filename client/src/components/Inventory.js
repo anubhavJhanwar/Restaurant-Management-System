@@ -154,14 +154,14 @@ const Inventory = () => {
         </h3>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           {[
-            { name: 'Burger Buns', unit: 'pieces' },
-            { name: 'Beef Patty', unit: 'pieces' },
+            { name: 'Aloo Patty', unit: 'pieces' },
+            { name: 'Chilli Herb Patty', unit: 'pieces' },
+            { name: 'Veg Patty', unit: 'pieces' },
+            { name: 'Paneer Patty', unit: 'pieces' },
             { name: 'Cheese Slices', unit: 'pieces' },
-            { name: 'Lettuce', unit: 'kg' },
-            { name: 'Tomatoes', unit: 'kg' },
-            { name: 'Onions', unit: 'kg' },
-            { name: 'Special Sauce', unit: 'liters' },
-            { name: 'French Fries', unit: 'kg' }
+            { name: 'Buns', unit: 'pieces' },
+            { name: 'Bread', unit: 'pieces' },
+            { name: 'Fries', unit: 'kg' }
           ].map((item, index) => (
             <button
               key={index}
@@ -260,7 +260,7 @@ const Inventory = () => {
                   value={formData.quantity}
                   onChange={handleInputChange}
                   className="form-input"
-                  step="0.01"
+                  step="1"
                   required
                 />
               </div>

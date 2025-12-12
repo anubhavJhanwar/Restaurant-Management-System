@@ -898,6 +898,7 @@ const Menu = () => {
                         <input
                           type="number"
                           min="0"
+                          step="1"
                           value={newMenuItem.buns}
                           onChange={(e) => setNewMenuItem({...newMenuItem, buns: parseInt(e.target.value) || 0})}
                           className="form-input"
@@ -927,6 +928,7 @@ const Menu = () => {
                           <input
                             type="number"
                             min="0"
+                            step="1"
                             value={newMenuItem.patties}
                             onChange={(e) => setNewMenuItem({...newMenuItem, patties: parseInt(e.target.value) || 0})}
                             className="form-input"
@@ -1308,6 +1310,7 @@ const Menu = () => {
                 <input
                   type="number"
                   min="1"
+                  step="1"
                   max={getMaxQuantity(selectedItem)}
                   value={orderQuantity}
                   onChange={(e) => setOrderQuantity(parseInt(e.target.value))}

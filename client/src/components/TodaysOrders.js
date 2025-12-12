@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Receipt, DollarSign, Clock, Hash, CheckCircle, XCircle, Edit3, Trash2 } from 'lucide-react';
+import { Plus, Receipt, DollarSign, Clock, Hash, CheckCircle, XCircle, Edit3, Trash2, Lock, Unlock } from 'lucide-react';
 import io from 'socket.io-client';
+import PinVerification from './PinVerification';
 
 const TodaysOrders = () => {
   const [orders, setOrders] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
+  const [extraItems, setExtraItems] = useState([]);
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
   const [showEditOrderModal, setShowEditOrderModal] = useState(false);
   const [showBillModal, setShowBillModal] = useState(false);
@@ -12,11 +14,16 @@ const TodaysOrders = () => {
   const [editingOrder, setEditingOrder] = useState(null);
   const [socket, setSocket] = useState(null);
   const [newOrder, setNewOrder] = useState({
-    items: [],
-    total_amount: 0
+    items: [], // Each item will have its own extras: {id, name, price, quantity, extras: []}
+    total_amount: 0,
+    payment_method: 'cash'
   });
+  const [selectedItemForExtras, setSelectedItemForExtras] = useState(null);
   const [selectedMenuItem, setSelectedMenuItem] = useState('');
   const [quantity, setQuantity] = useState(1);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinAction, setPinAction] = useState(null);
+  const [targetOrderId, setTargetOrderId] = useState(null);
 
   useEffect(() => {
     // Initialize socket connection
@@ -26,6 +33,7 @@ const TodaysOrders = () => {
     // Fetch initial data
     fetchTodaysOrders();
     fetchMenuItems();
+    fetchExtraItems();
 
     // Listen for real-time updates
     newSocket.on('new_order', () => {
@@ -59,28 +67,34 @@ const TodaysOrders = () => {
     }
   };
 
+  const fetchExtraItems = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/menu-extras');
+      const data = await response.json();
+      setExtraItems(data);
+    } catch (error) {
+      console.error('Error fetching extra items:', error);
+    }
+  };
+
   const addItemToOrder = () => {
     if (!selectedMenuItem || quantity <= 0) return;
 
     const menuItem = menuItems.find(item => item.id === selectedMenuItem);
     if (!menuItem) return;
 
-    const existingItemIndex = newOrder.items.findIndex(item => item.menu_item_id === selectedMenuItem);
-    
-    let updatedItems;
-    if (existingItemIndex >= 0) {
-      updatedItems = [...newOrder.items];
-      updatedItems[existingItemIndex].quantity += quantity;
-    } else {
-      updatedItems = [...newOrder.items, {
-        menu_item_id: menuItem.id,
-        name: menuItem.name,
-        price: menuItem.price,
-        quantity: quantity
-      }];
-    }
+    // Always add as a new item to allow different extras per item
+    const newItem = {
+      menu_item_id: menuItem.id,
+      name: menuItem.name,
+      price: menuItem.price,
+      quantity: quantity,
+      extras: [], // Each item has its own extras
+      itemKey: Date.now() + Math.random() // Unique key for each item instance
+    };
 
-    const total = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const updatedItems = [...newOrder.items, newItem];
+    const total = calculateOrderTotal(updatedItems);
 
     setNewOrder({
       ...newOrder,
@@ -92,9 +106,63 @@ const TodaysOrders = () => {
     setQuantity(1);
   };
 
+  const calculateOrderTotal = (items) => {
+    return items.reduce((sum, item) => {
+      const itemTotal = item.price * item.quantity;
+      const extrasTotal = item.extras ? item.extras.reduce((extraSum, extra) => extraSum + (extra.price * extra.quantity), 0) : 0;
+      return sum + itemTotal + extrasTotal;
+    }, 0);
+  };
+
+  const addExtraToItem = (itemIndex, extraId) => {
+    const extraItem = extraItems.find(item => item.id === extraId);
+    if (!extraItem) return;
+
+    const updatedItems = [...newOrder.items];
+    const item = updatedItems[itemIndex];
+    
+    if (!item.extras) {
+      item.extras = [];
+    }
+
+    const existingExtraIndex = item.extras.findIndex(extra => extra.id === extraId);
+    
+    if (existingExtraIndex >= 0) {
+      item.extras[existingExtraIndex].quantity += 1;
+    } else {
+      item.extras.push({
+        id: extraItem.id,
+        name: extraItem.name,
+        price: extraItem.price,
+        quantity: 1
+      });
+    }
+
+    const total = calculateOrderTotal(updatedItems);
+
+    setNewOrder({
+      ...newOrder,
+      items: updatedItems,
+      total_amount: total
+    });
+  };
+
+  const removeExtraFromItem = (itemIndex, extraIndex) => {
+    const updatedItems = [...newOrder.items];
+    updatedItems[itemIndex].extras.splice(extraIndex, 1);
+    
+    const total = calculateOrderTotal(updatedItems);
+    
+    setNewOrder({
+      ...newOrder,
+      items: updatedItems,
+      total_amount: total
+    });
+  };
+
   const removeItemFromOrder = (index) => {
     const updatedItems = newOrder.items.filter((_, i) => i !== index);
-    const total = updatedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const total = calculateOrderTotal(updatedItems);
     
     setNewOrder({
       ...newOrder,
@@ -110,10 +178,12 @@ const TodaysOrders = () => {
     }
 
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:5000/api/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(newOrder),
       });
@@ -122,7 +192,8 @@ const TodaysOrders = () => {
         setShowNewOrderModal(false);
         setNewOrder({
           items: [],
-          total_amount: 0
+          total_amount: 0,
+          payment_method: 'cash'
         });
         fetchTodaysOrders();
       }
@@ -203,17 +274,121 @@ const TodaysOrders = () => {
     }
   };
 
-  const deleteOrder = async (orderId) => {
-    try {
-        const response = await fetch(`http://localhost:5000/api/orders/${orderId}`, {
-          method: 'DELETE',
-        });
+  const handlePinVerification = (verifiedPin) => {
+    if (pinAction === 'delete') {
+      deleteOrderWithPin(targetOrderId, verifiedPin);
+    } else if (pinAction === 'lock') {
+      lockOrder(targetOrderId, verifiedPin);
+    } else if (pinAction === 'unlock') {
+      unlockOrder(targetOrderId, verifiedPin);
+    }
+  };
 
-        if (response.ok) {
-          fetchTodaysOrders();
-        }
-      } catch (error) {
+  const requestPinForAction = (action, orderId) => {
+    setPinAction(action);
+    setTargetOrderId(orderId);
+    setShowPinModal(true);
+  };
+
+  const lockOrderDirectly = async (orderId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/orders/${orderId}/lock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({}) // No PIN required for locking
+      });
+
+      if (response.ok) {
+        fetchTodaysOrders();
+      } else {
+        const data = await response.json();
+        alert('Failed to lock order: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Error locking order:', error);
+      alert('Error locking order');
+    }
+  };
+
+  const lockOrder = async (orderId, pin) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/orders/${orderId}/lock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ pin: pin })
+      });
+
+      if (response.ok) {
+        fetchTodaysOrders();
+        setShowPinModal(false);
+        // Don't show alert for successful operations
+      } else {
+        const data = await response.json();
+        alert('Failed to lock order: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Error locking order:', error);
+      alert('Error locking order');
+    }
+  };
+
+  const unlockOrder = async (orderId, pin) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/orders/${orderId}/unlock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ pin: pin })
+      });
+
+      if (response.ok) {
+        fetchTodaysOrders();
+        setShowPinModal(false);
+        // Don't show alert for successful operations
+      } else {
+        const data = await response.json();
+        alert('Failed to unlock order: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Error unlocking order:', error);
+      alert('Error unlocking order');
+    }
+  };
+
+  const deleteOrderWithPin = async (orderId, pin) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/orders/${orderId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ pin: pin })
+      });
+
+      if (response.ok) {
+        fetchTodaysOrders();
+        setShowPinModal(false);
+        // Don't show alert for successful operations
+      } else {
+        const data = await response.json();
+        alert('Failed to delete order: ' + data.error);
+      }
+    } catch (error) {
         console.error('Error deleting order:', error);
+        alert('Error deleting order');
       }
   };
 
@@ -365,11 +540,30 @@ const TodaysOrders = () => {
                   </div>
                   
                   <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>
-                    {order.items.map(item => `${item.quantity}x ${item.name}`).join(', ')}
+                    {order.items.map((item, index) => {
+                      let itemText = `${item.quantity}x ${item.name}`;
+                      if (item.extras && item.extras.length > 0) {
+                        const extrasText = item.extras.map(extra => `+ ${extra.name}`).join(' ');
+                        itemText += ` ${extrasText}`;
+                      }
+                      return itemText;
+                    }).join(', ')}
                   </div>
                   
-                  <div style={{ fontSize: '12px', color: '#999' }}>
-                    {new Date(order.created_at).toLocaleString()}
+                  <div style={{ fontSize: '12px', color: '#999', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>{new Date(order.created_at).toLocaleString()}</span>
+                    <span style={{
+                      backgroundColor: order.payment_method === 'cash' ? '#22c55e' : 
+                                     order.payment_method === 'online' ? '#3b82f6' : '#f59e0b',
+                      color: 'white',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontWeight: '600'
+                    }}>
+                      {order.payment_method === 'cash' ? 'CASH' : 
+                       order.payment_method === 'online' ? 'ONLINE' : 'CASH+ONLINE'}
+                    </span>
                   </div>
                 </div>
 
@@ -418,14 +612,14 @@ const TodaysOrders = () => {
                     </button>
 
                     <button
-                      onClick={() => editOrder(order)}
+                      onClick={() => order.is_locked ? alert('Order is locked. Unlock first to edit.') : editOrder(order)}
                       style={{
-                        backgroundColor: '#f59e0b',
+                        backgroundColor: order.is_locked ? '#ccc' : '#f59e0b',
                         color: 'white',
                         border: 'none',
                         padding: '8px 12px',
                         borderRadius: '8px',
-                        cursor: 'pointer',
+                        cursor: order.is_locked ? 'not-allowed' : 'pointer',
                         fontSize: '12px',
                         display: 'flex',
                         alignItems: 'center',
@@ -437,7 +631,7 @@ const TodaysOrders = () => {
                     </button>
 
                     <button
-                      onClick={() => deleteOrder(order.id)}
+                      onClick={() => requestPinForAction('delete', order.id)}
                       style={{
                         backgroundColor: '#6b7280',
                         color: 'white',
@@ -454,8 +648,48 @@ const TodaysOrders = () => {
                       <Trash2 size={14} />
                       Delete
                     </button>
+
+                    {order.is_locked ? (
+                      <button
+                        onClick={() => requestPinForAction('unlock', order.id)}
+                        style={{
+                          backgroundColor: '#f59e0b',
+                          color: 'white',
+                          border: 'none',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <Unlock size={14} />
+                        Unlock
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => lockOrderDirectly(order.id)}
+                        style={{
+                          backgroundColor: '#8b5cf6',
+                          color: 'white',
+                          border: 'none',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <Lock size={14} />
+                        Lock
+                      </button>
+                    )}
                     
-                    {order.payment_status === 'unpaid' ? (
+                    {order.payment_status === 'unpaid' && (
                       <button
                         onClick={() => updatePaymentStatus(order.id, 'paid')}
                         style={{
@@ -469,21 +703,6 @@ const TodaysOrders = () => {
                         }}
                       >
                         Mark Paid
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => updatePaymentStatus(order.id, 'unpaid')}
-                        style={{
-                          backgroundColor: '#ef4444',
-                          color: 'white',
-                          border: 'none',
-                          padding: '8px 12px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          fontSize: '12px'
-                        }}
-                      >
-                        Mark Unpaid
                       </button>
                     )}
                   </div>
@@ -521,6 +740,7 @@ const TodaysOrders = () => {
                 <input
                   type="number"
                   min="1"
+                  step="1"
                   value={quantity}
                   onChange={(e) => setQuantity(parseInt(e.target.value))}
                   className="form-input"
@@ -550,46 +770,147 @@ const TodaysOrders = () => {
               {newOrder.items.length === 0 ? (
                 <p style={{ color: '#666', fontStyle: 'italic' }}>No items added yet</p>
               ) : (
-                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                   {newOrder.items.map((item, index) => (
-                    <div key={index} style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
+                    <div key={item.itemKey || index} style={{
                       padding: '12px',
                       backgroundColor: '#f8f9fa',
                       borderRadius: '8px',
-                      marginBottom: '8px'
+                      marginBottom: '12px',
+                      border: selectedItemForExtras === index ? '2px solid #ff8c42' : '1px solid #e9ecef'
                     }}>
-                      <div>
-                        <span style={{ fontWeight: '600' }}>{item.name}</span>
-                        <span style={{ color: '#666', marginLeft: '8px' }}>
-                          {item.quantity}x {formatCurrency(item.price)}
-                        </span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <div>
+                          <span style={{ fontWeight: '600' }}>{item.name}</span>
+                          <span style={{ color: '#666', marginLeft: '8px' }}>
+                            {item.quantity}x {formatCurrency(item.price)}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            onClick={() => setSelectedItemForExtras(selectedItemForExtras === index ? null : index)}
+                            style={{
+                              backgroundColor: selectedItemForExtras === index ? '#ff8c42' : '#6b7280',
+                              color: 'white',
+                              border: 'none',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            {selectedItemForExtras === index ? 'Hide Extras' : 'Add Extras'}
+                          </button>
+                          <button
+                            onClick={() => removeItemFromOrder(index)}
+                            style={{
+                              backgroundColor: '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontWeight: '600' }}>
-                          {formatCurrency(item.price * item.quantity)}
-                        </span>
-                        <button
-                          onClick={() => removeItemFromOrder(index)}
-                          style={{
-                            backgroundColor: '#ef4444',
-                            color: 'white',
-                            border: 'none',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          Remove
-                        </button>
+                      
+                      {/* Show item's extras */}
+                      {item.extras && item.extras.length > 0 && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Extras:</div>
+                          {item.extras.map((extra, extraIndex) => (
+                            <div key={extraIndex} style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'center',
+                              fontSize: '12px',
+                              color: '#666',
+                              marginBottom: '2px'
+                            }}>
+                              <span>+ {extra.name} ({extra.quantity}x)</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span>{formatCurrency(extra.price * extra.quantity)}</span>
+                                <button
+                                  onClick={() => removeExtraFromItem(index, extraIndex)}
+                                  style={{
+                                    backgroundColor: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    padding: '2px 4px',
+                                    borderRadius: '2px',
+                                    cursor: 'pointer',
+                                    fontSize: '10px'
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Extras selection for this item */}
+                      {selectedItemForExtras === index && (
+                        <div style={{ 
+                          marginTop: '8px',
+                          padding: '8px',
+                          backgroundColor: '#fff',
+                          borderRadius: '4px',
+                          border: '1px solid #e9ecef'
+                        }}>
+                          <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '8px' }}>
+                            Add extras to this item:
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {extraItems.map(extra => (
+                              <button
+                                key={extra.id}
+                                onClick={() => addExtraToItem(index, extra.id)}
+                                style={{
+                                  backgroundColor: '#ff8c42',
+                                  color: 'white',
+                                  border: 'none',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '11px'
+                                }}
+                              >
+                                + {extra.name} ({formatCurrency(extra.price)})
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div style={{ textAlign: 'right', fontWeight: '600', marginTop: '8px' }}>
+                        Total: {formatCurrency(item.price * item.quantity + (item.extras ? item.extras.reduce((sum, extra) => sum + (extra.price * extra.quantity), 0) : 0))}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+
+
+
+            {/* Payment Method */}
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label className="form-label">Payment Method</label>
+              <select
+                value={newOrder.payment_method}
+                onChange={(e) => setNewOrder({...newOrder, payment_method: e.target.value})}
+                className="form-input"
+              >
+                <option value="cash">Cash (Offline)</option>
+                <option value="online">Online</option>
+                <option value="cash+online">Half Cash + Half Online</option>
+              </select>
             </div>
 
             {/* Total */}
@@ -669,6 +990,22 @@ const TodaysOrders = () => {
                   <span>{formatCurrency(item.price * item.quantity)}</span>
                 </div>
               ))}
+              
+              {selectedOrder.extras && selectedOrder.extras.length > 0 && (
+                <>
+                  <h4 style={{ marginBottom: '12px', marginTop: '16px' }}>Extras:</h4>
+                  {selectedOrder.extras.map((extra, index) => (
+                    <div key={index} style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      marginBottom: '8px'
+                    }}>
+                      <span>{extra.quantity}x {extra.name}</span>
+                      <span>{formatCurrency(extra.price * extra.quantity)}</span>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
 
             <div style={{
@@ -741,6 +1078,7 @@ const TodaysOrders = () => {
                 <input
                   type="number"
                   min="1"
+                  step="1"
                   value={quantity}
                   onChange={(e) => setQuantity(parseInt(e.target.value))}
                   className="form-input"
@@ -849,6 +1187,14 @@ const TodaysOrders = () => {
           </div>
         </div>
       )}
+
+      {/* PIN Verification Modal */}
+      <PinVerification
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onVerify={handlePinVerification}
+        title={`Owner PIN Required - ${pinAction?.toUpperCase()}`}
+      />
     </div>
   );
 };

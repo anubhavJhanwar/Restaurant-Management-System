@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, DollarSign, Calendar, CheckCircle, XCircle, Edit3, Trash2 } from 'lucide-react';
 import io from 'socket.io-client';
+import PinVerification from './PinVerification';
 
 const Expenditures = () => {
   const [expenditures, setExpenditures] = useState([]);
@@ -12,6 +13,8 @@ const Expenditures = () => {
     category: '',
     supplier: ''
   });
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [targetExpenditureId, setTargetExpenditureId] = useState(null);
 
   useEffect(() => {
     // Initialize socket connection
@@ -87,18 +90,37 @@ const Expenditures = () => {
     }
   };
 
-  const deleteExpenditure = async (id) => {
-    try {
-        const response = await fetch(`http://localhost:5000/api/expenditures/${id}`, {
-          method: 'DELETE',
-        });
+  const requestPinForDelete = (expenditureId) => {
+    setTargetExpenditureId(expenditureId);
+    setShowPinModal(true);
+  };
 
-        if (response.ok) {
-          fetchExpenditures();
-        }
-      } catch (error) {
-        console.error('Error deleting expenditure:', error);
+  const handlePinVerification = (pinValue) => {
+    deleteExpenditureWithPin(targetExpenditureId, pinValue);
+  };
+
+  const deleteExpenditureWithPin = async (id, pin) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/expenditures/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ pin: pin }) // Use actual PIN value
+      });
+
+      if (response.ok) {
+        fetchExpenditures();
+      } else {
+        const data = await response.json();
+        alert('Failed to delete expenditure: ' + data.error);
       }
+    } catch (error) {
+      console.error('Error deleting expenditure:', error);
+      alert('Error deleting expenditure');
+    }
   };
 
   const formatCurrency = (value) => {
@@ -306,7 +328,7 @@ const Expenditures = () => {
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    {expenditure.payment_status === 'unpaid' ? (
+                    {expenditure.payment_status === 'unpaid' && (
                       <button
                         onClick={() => updatePaymentStatus(expenditure.id, 'paid')}
                         style={{
@@ -321,25 +343,10 @@ const Expenditures = () => {
                       >
                         Mark Paid
                       </button>
-                    ) : (
-                      <button
-                        onClick={() => updatePaymentStatus(expenditure.id, 'unpaid')}
-                        style={{
-                          backgroundColor: '#ef4444',
-                          color: 'white',
-                          border: 'none',
-                          padding: '8px 12px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          fontSize: '12px'
-                        }}
-                      >
-                        Mark Unpaid
-                      </button>
                     )}
                     
                     <button
-                      onClick={() => deleteExpenditure(expenditure.id)}
+                      onClick={() => requestPinForDelete(expenditure.id)}
                       style={{
                         backgroundColor: '#6b7280',
                         color: 'white',
@@ -347,10 +354,14 @@ const Expenditures = () => {
                         padding: '8px 12px',
                         borderRadius: '8px',
                         cursor: 'pointer',
-                        fontSize: '12px'
+                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
                       }}
                     >
                       <Trash2 size={14} />
+                      Delete
                     </button>
                   </div>
                 </div>
@@ -442,6 +453,14 @@ const Expenditures = () => {
           </div>
         </div>
       )}
+
+      {/* PIN Verification Modal */}
+      <PinVerification
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onVerify={handlePinVerification}
+        title="Owner PIN Required - DELETE"
+      />
     </div>
   );
 };

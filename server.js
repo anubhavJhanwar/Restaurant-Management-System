@@ -7,6 +7,9 @@ const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,7 +22,269 @@ const io = socketIo(server, {
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'client/build')));
+// app.use(express.static(path.join(__dirname, 'client/build')));
+
+// JWT Secret (in production, use environment variable)
+const JWT_SECRET = process.env.JWT_SECRET || 'burgerboss_secret_key_2024';
+
+// Restore menu items endpoint
+app.post('/api/restore-menu', (req, res) => {
+  const defaultMenuItems = [
+    {
+      id: '1',
+      name: 'Aloo Tikki Burger',
+      price: 89,
+      category: 'Burgers',
+      ingredients: JSON.stringify(['Aloo Tikki Patty', 'Bun', 'Lettuce', 'Tomato', 'Onion', 'Mayo']),
+      active: 1
+    },
+    {
+      id: '2', 
+      name: 'Paneer Burger',
+      price: 109,
+      category: 'Burgers',
+      ingredients: JSON.stringify(['Paneer Patty', 'Bun', 'Lettuce', 'Tomato', 'Onion', 'Mayo']),
+      active: 1
+    },
+    {
+      id: '3',
+      name: 'Veg Burger',
+      price: 79,
+      category: 'Burgers', 
+      ingredients: JSON.stringify(['Veg Patty', 'Bun', 'Lettuce', 'Tomato', 'Onion', 'Mayo']),
+      active: 1
+    },
+    {
+      id: '4',
+      name: 'Cheese Burger',
+      price: 99,
+      category: 'Burgers',
+      ingredients: JSON.stringify(['Veg Patty', 'Cheese Slice', 'Bun', 'Lettuce', 'Tomato', 'Mayo']),
+      active: 1
+    },
+    {
+      id: '5',
+      name: 'Double Cheese Burger',
+      price: 129,
+      category: 'Burgers',
+      ingredients: JSON.stringify(['Veg Patty', 'Double Cheese Slice', 'Bun', 'Lettuce', 'Tomato', 'Mayo']),
+      active: 1
+    },
+    {
+      id: '6',
+      name: 'French Fries',
+      price: 59,
+      category: 'Sides',
+      ingredients: JSON.stringify(['Potato Fries', 'Salt', 'Oil']),
+      active: 1
+    },
+    {
+      id: '7',
+      name: 'Peri Peri Fries',
+      price: 79,
+      category: 'Sides',
+      ingredients: JSON.stringify(['Potato Fries', 'Peri Peri Seasoning', 'Salt', 'Oil']),
+      active: 1
+    },
+    {
+      id: '8',
+      name: 'Cold Coffee',
+      price: 69,
+      category: 'Beverages',
+      ingredients: JSON.stringify(['Coffee', 'Milk', 'Sugar', 'Ice']),
+      active: 1
+    },
+    {
+      id: '9',
+      name: 'Masala Chai',
+      price: 29,
+      category: 'Beverages',
+      ingredients: JSON.stringify(['Tea Leaves', 'Milk', 'Sugar', 'Spices']),
+      active: 1
+    },
+    {
+      id: '10',
+      name: 'Coke',
+      price: 39,
+      category: 'Beverages',
+      ingredients: JSON.stringify(['Coca Cola']),
+      active: 1
+    }
+  ];
+
+  // Insert menu items
+  const insertPromises = defaultMenuItems.map(item => {
+    return new Promise((resolve, reject) => {
+      db.run(`INSERT OR REPLACE INTO menu_items (id, name, price, category, ingredients, active, created_at) 
+              VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+              [item.id, item.name, item.price, item.category, item.ingredients, item.active], 
+              function(err) {
+                if (err) reject(err);
+                else resolve();
+              });
+    });
+  });
+
+  Promise.all(insertPromises)
+    .then(() => {
+      console.log('Menu items restored successfully');
+      res.json({ message: 'Menu items restored successfully' });
+    })
+    .catch(err => {
+      console.error('Error restoring menu items:', err);
+      res.status(500).json({ error: 'Failed to restore menu items' });
+    });
+});
+
+// Restore inventory endpoint
+app.post('/api/restore-inventory', (req, res) => {
+  const defaultInventory = [
+    { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces' },
+    { id: '2', name: 'Paneer Patty', quantity: 30, unit: 'pieces' },
+    { id: '3', name: 'Veg Patty', quantity: 40, unit: 'pieces' },
+    { id: '4', name: 'Cheese Slices', quantity: 100, unit: 'pieces' },
+    { id: '5', name: 'Buns', quantity: 80, unit: 'pieces' },
+    { id: '6', name: 'Lettuce', quantity: 5, unit: 'kg' },
+    { id: '7', name: 'Tomato', quantity: 8, unit: 'kg' },
+    { id: '8', name: 'Onion', quantity: 10, unit: 'kg' },
+    { id: '9', name: 'Mayo', quantity: 3, unit: 'bottles' },
+    { id: '10', name: 'Potato Fries', quantity: 15, unit: 'kg' },
+    { id: '11', name: 'Peri Peri Seasoning', quantity: 2, unit: 'packets' },
+    { id: '12', name: 'Coffee', quantity: 1, unit: 'kg' },
+    { id: '13', name: 'Milk', quantity: 10, unit: 'liters' },
+    { id: '14', name: 'Sugar', quantity: 5, unit: 'kg' },
+    { id: '15', name: 'Tea Leaves', quantity: 500, unit: 'grams' },
+    { id: '16', name: 'Coca Cola', quantity: 24, unit: 'bottles' }
+  ];
+
+  // Insert inventory items
+  const insertPromises = defaultInventory.map(item => {
+    return new Promise((resolve, reject) => {
+      db.run(`INSERT OR REPLACE INTO inventory (id, name, quantity, unit, created_at) 
+              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+              [item.id, item.name, item.quantity, item.unit], 
+              function(err) {
+                if (err) reject(err);
+                else resolve();
+              });
+    });
+  });
+
+  Promise.all(insertPromises)
+    .then(() => {
+      console.log('Inventory restored successfully');
+      res.json({ message: 'Inventory restored successfully' });
+    })
+    .catch(err => {
+      console.error('Error restoring inventory:', err);
+      res.status(500).json({ error: 'Failed to restore inventory' });
+    });
+});
+
+// Debug endpoint to check users
+app.get('/api/debug/check-users', (req, res) => {
+  db.all(`SELECT id, username, role, email FROM users ORDER BY created_at DESC`, (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: 'Database error' });
+    }
+    res.json({ users: rows });
+  });
+});
+
+// Test default login endpoint
+app.post('/api/debug/test-default-login', (req, res) => {
+  const { username, password } = req.body;
+  
+  db.get("SELECT * FROM users WHERE username = ? AND role = 'Default'", [username], (err, user) => {
+    if (err) {
+      return res.json({ error: 'Database error', details: err.message });
+    }
+    
+    if (!user) {
+      return res.json({ error: 'User not found', username: username });
+    }
+    
+    const passwordMatch = bcrypt.compareSync(password, user.password);
+    
+    res.json({
+      userFound: true,
+      username: user.username,
+      role: user.role,
+      passwordMatch: passwordMatch,
+      providedPassword: password
+    });
+  });
+});
+
+// Debug endpoint to check user PINs
+app.get('/api/debug/check-pins', (req, res) => {
+  db.all(`SELECT username, role, pin FROM users WHERE role = 'Owner'`, (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    const users = rows.map(user => ({
+      username: user.username,
+      role: user.role,
+      hasPin: user.pin ? true : false,
+      pinLength: user.pin ? user.pin.length : 0
+    }));
+    
+    res.json({ users });
+  });
+});
+
+// Fix database constraint to allow Default role
+function fixDatabaseConstraint() {
+  // Check if we need to migrate by trying to insert a test Default user
+  db.run(`CREATE TABLE IF NOT EXISTS users_fixed (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('Owner', 'Default')),
+    full_name TEXT NOT NULL,
+    pin TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, (err) => {
+    if (err) {
+      console.error('Error creating fixed users table:', err);
+      return;
+    }
+    
+    // Copy existing data to new table
+    db.run(`INSERT INTO users_fixed (id, username, email, password, role, full_name, pin, created_at)
+            SELECT id, username, email, password, role, full_name, pin, created_at 
+            FROM users WHERE role IN ('Owner', 'Default')`, (err) => {
+      if (err) {
+        console.log('No existing users to migrate or migration not needed');
+      }
+      
+      // Drop old table and rename new one
+      db.run(`DROP TABLE IF EXISTS users`, (err) => {
+        if (err) {
+          console.error('Error dropping old users table:', err);
+          return;
+        }
+        
+        db.run(`ALTER TABLE users_fixed RENAME TO users`, (err) => {
+          if (err) {
+            console.error('Error renaming table:', err);
+          } else {
+            console.log('Database constraint fixed - Default role now allowed');
+          }
+        });
+      });
+    });
+  });
+}
+
+// Rate limiting for auth endpoints (increased limits for development)
+const authLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 20, // limit each IP to 20 requests per windowMs
+  message: 'Too many authentication attempts, please try again later.'
+});
 
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -61,6 +326,37 @@ const db = new sqlite3.Database('./restaurant.db');
 
 // Create tables
 db.serialize(() => {
+  // Users table for authentication
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('Owner', 'Default')),
+    full_name TEXT NOT NULL,
+    pin TEXT,
+    is_active BOOLEAN DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_login DATETIME
+  )`);
+
+  // Add pin column if it doesn't exist (for existing databases)
+  db.run(`ALTER TABLE users ADD COLUMN pin TEXT`, (err) => {
+    // Ignore error if column already exists
+  });
+
+  // Fix database constraint to allow Default role
+  fixDatabaseConstraint();
+
+  // Restaurant settings table
+  db.run(`CREATE TABLE IF NOT EXISTS restaurant_settings (
+    id INTEGER PRIMARY KEY,
+    owner_pin TEXT NOT NULL,
+    restaurant_name TEXT DEFAULT 'BurgerBoss',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   // Menu items table
   db.run(`CREATE TABLE IF NOT EXISTS menu_items (
     id TEXT PRIMARY KEY,
@@ -86,11 +382,35 @@ db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS orders (
     id TEXT PRIMARY KEY,
     items TEXT NOT NULL,
+    extras TEXT DEFAULT '[]',
     total_amount REAL NOT NULL,
     status TEXT DEFAULT 'pending',
     payment_status TEXT DEFAULT 'unpaid',
+    payment_method TEXT DEFAULT 'cash' CHECK(payment_method IN ('cash', 'online', 'cash+online')),
+    is_locked BOOLEAN DEFAULT 0,
+    locked_by TEXT,
+    locked_at DATETIME,
+    created_by TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Add extras column if it doesn't exist (for existing databases)
+  db.run(`ALTER TABLE orders ADD COLUMN extras TEXT DEFAULT '[]'`, (err) => {
+    // Ignore error if column already exists
+  });
+
+  // Add payment_method column if it doesn't exist (for existing databases)
+  db.run(`ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'cash'`, (err) => {
+    // Ignore error if column already exists
+  });
+
+  // Add other missing columns
+  db.run(`ALTER TABLE orders ADD COLUMN status TEXT DEFAULT 'pending'`, (err) => {});
+  db.run(`ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'unpaid'`, (err) => {});
+  db.run(`ALTER TABLE orders ADD COLUMN is_locked BOOLEAN DEFAULT 0`, (err) => {});
+  db.run(`ALTER TABLE orders ADD COLUMN locked_by TEXT`, (err) => {});
+  db.run(`ALTER TABLE orders ADD COLUMN locked_at DATETIME`, (err) => {});
+  db.run(`ALTER TABLE orders ADD COLUMN created_by TEXT`, (err) => {});
 
   // Sales analytics table
   db.run(`CREATE TABLE IF NOT EXISTS sales_analytics (
@@ -111,12 +431,175 @@ db.serialize(() => {
     amount REAL NOT NULL,
     category TEXT NOT NULL,
     payment_status TEXT DEFAULT 'unpaid',
+    payment_method TEXT DEFAULT 'cash' CHECK(payment_method IN ('cash', 'online', 'cash+online')),
     supplier TEXT,
+    is_locked BOOLEAN DEFAULT 0,
+    locked_by TEXT,
+    locked_at DATETIME,
+    created_by TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
+
+  // Menu extras table (for add-ons like extra cheese, extra patty)
+  db.run(`CREATE TABLE IF NOT EXISTS menu_extras (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    price REAL NOT NULL,
+    category TEXT NOT NULL,
+    active BOOLEAN DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  // User activity logs table
+  db.run(`CREATE TABLE IF NOT EXISTS user_activity_logs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    details TEXT,
+    ip_address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+  )`);
+
+  // PIN operations log table
+  db.run(`CREATE TABLE IF NOT EXISTS pin_operations_log (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    operation_type TEXT NOT NULL,
+    target_id TEXT,
+    target_type TEXT,
+    details TEXT,
+    ip_address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+  )`);
+
+  // No default accounts - users must create their own accounts
+
+  // Initialize default menu extras
+  db.get("SELECT COUNT(*) as count FROM menu_extras", (err, row) => {
+    if (!err && row.count === 0) {
+      const defaultExtras = [
+        { id: uuidv4(), name: 'Extra Cheese Slice', price: 15, category: 'Cheese' },
+        { id: uuidv4(), name: 'Extra Beef Patty', price: 50, category: 'Patty' },
+        { id: uuidv4(), name: 'Extra Chicken Patty', price: 45, category: 'Patty' },
+        { id: uuidv4(), name: 'Extra Bacon', price: 25, category: 'Meat' },
+        { id: uuidv4(), name: 'Extra Lettuce', price: 5, category: 'Vegetable' },
+        { id: uuidv4(), name: 'Extra Tomato', price: 8, category: 'Vegetable' },
+        { id: uuidv4(), name: 'Extra Onion', price: 5, category: 'Vegetable' }
+      ];
+      
+      defaultExtras.forEach(extra => {
+        db.run(`INSERT INTO menu_extras (id, name, price, category) VALUES (?, ?, ?, ?)`,
+               [extra.id, extra.name, extra.price, extra.category]);
+      });
+      
+      console.log('Default menu extras initialized');
+    }
+  });
+  
+
 });
 
-// Database is now empty - ready for fresh data
+
+
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  // Handle JWT tokens for both staff and owners
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Role-based authorization middleware
+const authorizeRole = (roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  };
+};
+
+// PIN verification middleware with logging
+const verifyOwnerPin = async (req, res, next) => {
+  const { pin } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  
+  console.log('PIN Verification Request:', {
+    userId: req.user?.id,
+    username: req.user?.username,
+    role: req.user?.role,
+    pinReceived: pin,
+    pinLength: pin?.length
+  });
+  
+  if (!pin) {
+    return res.status(400).json({ error: 'PIN required' });
+  }
+
+  // For Staff users (id 999), only Owner PINs work
+  if (req.user && req.user.role === 'Staff') {
+    db.all("SELECT id, pin FROM users WHERE role = 'Owner'", (err, rows) => {
+      if (err) {
+        return res.status(500).json({ error: 'Failed to verify PIN' });
+      }
+      
+      let pinMatched = false;
+      for (const row of rows) {
+        if (bcrypt.compareSync(pin, row.pin)) {
+          pinMatched = true;
+          logPinOperation(req.user.id, 'PIN_VERIFICATION_SUCCESS', null, null, 
+                        `Staff used Owner PIN from ${ipAddress}`, ipAddress);
+          break;
+        }
+      }
+      
+      if (pinMatched) {
+        console.log('Staff PIN verification SUCCESS using Owner PIN');
+        return next();
+      } else {
+        console.log('Staff PIN verification FAILED - invalid Owner PIN');
+        logPinOperation(req.user.id, 'PIN_VERIFICATION_FAILED', null, null, 
+                      `Staff failed PIN attempt from ${ipAddress}`, ipAddress);
+        return res.status(403).json({ error: 'Invalid PIN. Only Owner PIN works for staff operations.' });
+      }
+    });
+  }
+  // For Owner users, check their own PIN
+  else if (req.user && req.user.role === 'Owner') {
+    db.get("SELECT pin FROM users WHERE id = ?", [req.user.id], (err, userRow) => {
+      if (err) {
+        return res.status(500).json({ error: 'Failed to verify PIN' });
+      }
+      
+      if (userRow && bcrypt.compareSync(pin, userRow.pin)) {
+        console.log('Owner PIN verification SUCCESS');
+        logPinOperation(req.user.id, 'PIN_VERIFICATION_SUCCESS', null, null, 
+                      `Owner PIN verification from ${ipAddress}`, ipAddress);
+        return next();
+      } else {
+        console.log('Owner PIN verification FAILED');
+        logPinOperation(req.user.id, 'PIN_VERIFICATION_FAILED', null, null, 
+                      `Owner failed PIN attempt from ${ipAddress}`, ipAddress);
+        return res.status(403).json({ error: 'Invalid Owner PIN.' });
+      }
+    });
+  } else {
+    return res.status(403).json({ error: 'Access denied' });
+  }
+};
 
 // Generate custom order ID
 function generateOrderId() {
@@ -141,8 +624,445 @@ function generateOrderId() {
   });
 }
 
+// Helper function to log user activity
+const logUserActivity = (userId, action, details = null, ipAddress = null) => {
+  const logId = uuidv4();
+  db.run(`INSERT INTO user_activity_logs (id, user_id, action, details, ip_address) 
+          VALUES (?, ?, ?, ?, ?)`,
+          [logId, userId, action, details, ipAddress]);
+};
+
+// Helper function to log PIN operations
+const logPinOperation = (userId, operationType, targetId = null, targetType = null, details = null, ipAddress = null) => {
+  const logId = uuidv4();
+  db.run(`INSERT INTO pin_operations_log (id, user_id, operation_type, target_id, target_type, details, ip_address) 
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [logId, userId, operationType, targetId, targetType, details, ipAddress]);
+};
+
+// Authentication Routes
+// Default account login endpoint
+app.post('/api/auth/default-login', authLimiter, (req, res) => {
+  const { username, password } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  console.log('Default account login attempt:', { username, ipAddress });
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+
+  // Default account login - check database for default accounts
+  db.get("SELECT * FROM users WHERE username = ? AND role = 'Default'", [username], (err, user) => {
+    if (err) {
+      console.error('Database error during default login:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    console.log('Debug - User found:', user ? 'Yes' : 'No');
+    if (user) {
+      console.log('Debug - Username match:', user.username === username);
+      console.log('Debug - Password check:', bcrypt.compareSync(password, user.password));
+    }
+
+    if (!user || !bcrypt.compareSync(password, user.password)) {
+      console.log('Invalid default account login attempt:', username);
+      return res.status(401).json({ error: 'Invalid default account credentials' });
+    }
+
+    // Log activity
+    logUserActivity(user.id, 'LOGIN', `Default account logged in from ${ipAddress}`, ipAddress);
+
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        username: user.username, 
+        role: user.role,
+        full_name: user.full_name 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('Successful default account login:', user.username);
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        full_name: user.full_name
+      }
+    });
+  });
+});
+
+// Owner login endpoint
+app.post('/api/auth/owner-login', authLimiter, (req, res) => {
+  const { username, password } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  console.log('Owner login attempt:', { username, ipAddress });
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+
+  // Owner logini - check database
+  db.get("SELECT * FROM users WHERE username = ? AND role = 'Owner'", [username], (err, user) => {
+    if (err) {
+      console.error('Database error during owner login:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (!user || !bcrypt.compareSync(password, user.password)) {
+      console.log('Invalid owner login attempt:', username);
+      return res.status(401).json({ error: 'Invalid owner credentials' });
+    }
+
+    // Log activity
+    logUserActivity(user.id, 'LOGIN', `Owner logged in from ${ipAddress}`, ipAddress);
+
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        username: user.username, 
+        role: user.role,
+        full_name: user.full_name 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('Successful owner login:', user.username);
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        full_name: user.full_name
+      }
+    });
+  });
+});
+
+// Owner signup endpoint
+app.post('/api/auth/signup-owner', (req, res) => {
+  const { username, email, password, pin } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  console.log('Owner signup attempt:', { username, email });
+
+  if (!username || !email || !password || !pin) {
+    return res.status(400).json({ error: 'All fields required' });
+  }
+
+  if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+    return res.status(400).json({ error: 'PIN must be exactly 4 digits' });
+  }
+
+  // Check current owner count limit (max 3)
+  db.get(`SELECT COUNT(*) as count FROM users WHERE role = 'Owner'`, (err, row) => {
+    if (err) {
+      console.error('Error checking owner count:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (row.count >= 3) {
+      return res.status(400).json({ error: 'Maximum 3 owner accounts allowed. Limit reached.' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const hashedPin = bcrypt.hashSync(pin, 10);
+    const userId = uuidv4();
+
+    db.run(`INSERT INTO users (id, username, email, password, role, full_name, pin) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [userId, username, email, hashedPassword, 'Owner', username, hashedPin], function(err) {
+      if (err) {
+        console.error('Error creating owner:', err);
+        if (err.message.includes('UNIQUE constraint failed')) {
+          return res.status(400).json({ error: 'Username or email already exists' });
+        }
+        return res.status(500).json({ error: 'Failed to create owner account' });
+      }
+
+      // Log the signup
+      logUserActivity(userId, 'SIGNUP', `Owner signed up from ${ipAddress}`, ipAddress);
+
+      // Auto-login after signup
+      const token = jwt.sign(
+        { 
+          id: userId, 
+          username: username, 
+          role: 'Owner',
+          full_name: username 
+        },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      console.log('Owner created successfully:', username);
+      res.json({ 
+        message: 'Owner account created successfully',
+        token,
+        user: {
+          id: userId,
+          username: username,
+          email: email,
+          role: 'Owner',
+          full_name: username
+        }
+      });
+    });
+  });
+});
+
+// Default account signup endpoint
+app.post('/api/auth/signup-default', (req, res) => {
+  const { username, password } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  console.log('Default account signup attempt:', { username });
+
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+
+  // Check current default account count limit (max 2)
+  db.get(`SELECT COUNT(*) as count FROM users WHERE role = 'Default'`, (err, row) => {
+    if (err) {
+      console.error('Error checking default account count:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (row.count >= 2) {
+      return res.status(400).json({ error: 'Maximum 2 default accounts allowed. Limit reached.' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const userId = uuidv4();
+
+    db.run(`INSERT INTO users (id, username, email, password, role, full_name, pin) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [userId, username, `${username}@restaurant.com`, hashedPassword, 'Default', username, null], function(err) {
+      if (err) {
+        console.error('Error creating default account:', err);
+        if (err.message.includes('UNIQUE constraint failed')) {
+          return res.status(400).json({ error: 'Username already exists' });
+        }
+        return res.status(500).json({ error: 'Failed to create default account' });
+      }
+
+      // Log the signup
+      logUserActivity(userId, 'SIGNUP', `Default account signed up from ${ipAddress}`, ipAddress);
+
+      // Auto-login after signup
+      const token = jwt.sign(
+        { 
+          id: userId, 
+          username: username, 
+          role: 'Default',
+          full_name: username 
+        },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      console.log('Default account created successfully:', username);
+      res.json({ 
+        message: 'Default account created successfully',
+        token,
+        user: {
+          id: userId,
+          username: username,
+          email: `${username}@restaurant.com`,
+          role: 'Default',
+          full_name: username
+        }
+      });
+    });
+  });
+});
+
+
+
+// Removed create-staff endpoint - users can signup directly
+
+app.get('/api/auth/me', authenticateToken, (req, res) => {
+  db.get("SELECT id, username, email, role, full_name FROM users WHERE id = ?", 
+         [req.user.id], (err, user) => {
+    if (err || !user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(user);
+  });
+});
+
+app.get('/api/auth/users', authenticateToken, authorizeRole(['Owner', 'Default']), (req, res) => {
+  db.all("SELECT id, username, email, role, full_name, created_at FROM users ORDER BY created_at DESC", 
+         (err, users) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to fetch users' });
+    }
+    res.json(users);
+  });
+});
+
+// User management endpoints for Owner
+app.get('/api/admin/users', authenticateToken, authorizeRole(['Owner']), (req, res) => {
+  db.all(`SELECT id, username, email, role, full_name, created_at FROM users ORDER BY created_at DESC`, (err, rows) => {
+    if (err) {
+      console.error('Error fetching users:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    // Count users by role
+    const ownerCount = rows.filter(user => user.role === 'Owner').length;
+    const defaultCount = rows.filter(user => user.role === 'Default').length;
+    
+    res.json({ 
+      users: rows,
+      counts: {
+        owner: ownerCount,
+        default: defaultCount,
+        total: rows.length
+      }
+    });
+  });
+});
+
+// Delete user endpoint (Owner only)
+app.delete('/api/admin/users/:userId', authenticateToken, authorizeRole(['Owner']), (req, res) => {
+  const { userId } = req.params;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+
+  // Prevent owner from deleting themselves
+  if (userId === req.user.id) {
+    return res.status(400).json({ error: 'Cannot delete your own account' });
+  }
+
+  // Get user info before deletion for logging
+  db.get(`SELECT username, role FROM users WHERE id = ?`, [userId], (err, user) => {
+    if (err) {
+      console.error('Error fetching user for deletion:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Delete the user
+    db.run(`DELETE FROM users WHERE id = ?`, [userId], function(err) {
+      if (err) {
+        console.error('Error deleting user:', err);
+        return res.status(500).json({ error: 'Failed to delete user' });
+      }
+
+      // Log the deletion
+      logUserActivity(req.user.id, 'DELETE_USER', `Deleted user ${user.username} (${user.role}) from ${ipAddress}`, ipAddress);
+
+      console.log(`User ${user.username} (${user.role}) deleted by ${req.user.username}`);
+      res.json({ 
+        message: 'User deleted successfully',
+        deletedUser: {
+          username: user.username,
+          role: user.role
+        }
+      });
+    });
+  });
+});
+
+// PIN Management Routes
+app.post('/api/auth/verify-pin', authenticateToken, verifyOwnerPin, (req, res) => {
+  res.json({ message: 'PIN verified successfully' });
+});
+
+app.post('/api/auth/change-pin', authenticateToken, authorizeRole(['Owner']), (req, res) => {
+  const { currentPin, newPin } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  
+  if (!currentPin || !newPin) {
+    return res.status(400).json({ error: 'Current PIN and new PIN are required' });
+  }
+  
+  if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+    return res.status(400).json({ error: 'New PIN must be exactly 4 digits' });
+  }
+
+  // Verify current PIN first
+  db.get("SELECT pin FROM users WHERE id = ?", [req.user.id], (err, userRow) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to verify current PIN' });
+    }
+    
+    if (!userRow || !bcrypt.compareSync(currentPin, userRow.pin)) {
+      logPinOperation(req.user.id, 'PIN_CHANGE_FAILED', null, null, 
+                    `Failed PIN change attempt from ${ipAddress}`, ipAddress);
+      return res.status(403).json({ error: 'Current PIN is incorrect' });
+    }
+    
+    // Update to new PIN
+    const hashedNewPin = bcrypt.hashSync(newPin, 10);
+    
+    db.run("UPDATE users SET pin = ? WHERE id = ?", [hashedNewPin, req.user.id], function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'Failed to update PIN' });
+      }
+      
+      logPinOperation(req.user.id, 'PIN_CHANGED', null, null, 
+                    `PIN changed successfully from ${ipAddress}`, ipAddress);
+      res.json({ message: 'PIN updated successfully' });
+    });
+  });
+});
+
+// Menu Extras Routes
+app.get('/api/menu-extras', (req, res) => {
+  db.all('SELECT * FROM menu_extras WHERE active = 1 ORDER BY category, name', (err, rows) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    res.json(rows);
+  });
+});
+
+app.post('/api/menu-extras', authenticateToken, authorizeRole(['Owner', 'Default']), (req, res) => {
+  const { name, price, category } = req.body;
+  const id = uuidv4();
+  
+  db.run(`INSERT INTO menu_extras (id, name, price, category) VALUES (?, ?, ?, ?)`,
+         [id, name, price, category], function(err) {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    res.json({ id, message: 'Menu extra added successfully' });
+  });
+});
+
+app.put('/api/menu-extras/:id', authenticateToken, authorizeRole(['Owner', 'Default']), (req, res) => {
+  const { id } = req.params;
+  const { name, price, category } = req.body;
+  
+  db.run(`UPDATE menu_extras SET name = ?, price = ?, category = ? WHERE id = ?`,
+         [name, price, category, id], function(err) {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    res.json({ message: 'Menu extra updated successfully' });
+  });
+});
+
 // API Routes
-app.get('/api/dashboard/stats', (req, res) => {
+app.get('/api/dashboard/stats', authenticateToken, (req, res) => {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format in local time
   
   // Get real-time stats from orders table
@@ -165,10 +1085,11 @@ app.get('/api/dashboard/stats', (req, res) => {
 });
 
 // Get sales by category for pie chart
-app.get('/api/dashboard/category-sales', (req, res) => {
+// Get top selling products
+app.get('/api/dashboard/top-products', authenticateToken, (req, res) => {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format in local time
   
-  // Get all paid orders for today
+  // Get top selling products from today's orders
   db.all(`SELECT items FROM orders 
           WHERE DATE(datetime(created_at, 'localtime')) = ? AND payment_status = 'paid'`, [today], async (err, orders) => {
     if (err) {
@@ -176,7 +1097,7 @@ app.get('/api/dashboard/category-sales', (req, res) => {
       return;
     }
     
-    const categoryStats = {};
+    const productStats = {};
     
     // Process each order
     for (const order of orders) {
@@ -185,21 +1106,29 @@ app.get('/api/dashboard/category-sales', (req, res) => {
         
         // Process each item in the order
         for (const item of items) {
-          // Get the menu item to find its category
+          // Get the menu item details
           const menuItem = await new Promise((resolve, reject) => {
-            db.get(`SELECT category FROM menu_items WHERE id = ?`, [item.menu_item_id], (err, row) => {
+            db.get(`SELECT name, category, price FROM menu_items WHERE id = ?`, [item.menu_item_id], (err, row) => {
               if (err) reject(err);
               else resolve(row);
             });
           });
           
           if (menuItem) {
-            const category = menuItem.category;
-            if (!categoryStats[category]) {
-              categoryStats[category] = { category, quantity: 0, sales: 0 };
+            const key = `${menuItem.name}`;
+            if (!productStats[key]) {
+              productStats[key] = { 
+                name: menuItem.name,
+                category: menuItem.category || 'Other',
+                price: menuItem.price,
+                quantity: 0, 
+                sales: 0,
+                orders: new Set()
+              };
             }
-            categoryStats[category].quantity += item.quantity;
-            categoryStats[category].sales += item.price * item.quantity;
+            productStats[key].quantity += item.quantity;
+            productStats[key].sales += item.price * item.quantity;
+            productStats[key].orders.add(order.id);
           }
         }
       } catch (e) {
@@ -207,24 +1136,20 @@ app.get('/api/dashboard/category-sales', (req, res) => {
       }
     }
     
-    const result = Object.values(categoryStats);
+    // Convert to array and sort by quantity
+    const result = Object.values(productStats)
+      .map(item => ({
+        ...item,
+        orders: item.orders.size
+      }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 5); // Top 5 products
     
-    // If no data, return default categories with 0 values
-    if (result.length === 0) {
-      const defaultCategories = [
-        { category: 'Burgers', quantity: 0, sales: 0 },
-        { category: 'Sides', quantity: 0, sales: 0 },
-        { category: 'Drinks', quantity: 0, sales: 0 },
-        { category: 'Desserts', quantity: 0, sales: 0 }
-      ];
-      res.json(defaultCategories);
-    } else {
-      res.json(result);
-    }
+    res.json(result);
   });
 });
 
-app.get('/api/dashboard/hourly-sales', (req, res) => {
+app.get('/api/dashboard/hourly-sales', authenticateToken, (req, res) => {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format in local time
   
   db.all(`SELECT 
@@ -261,7 +1186,7 @@ app.get('/api/dashboard/hourly-sales', (req, res) => {
 });
 
 // Get recent orders for dashboard
-app.get('/api/dashboard/recent-orders', (req, res) => {
+app.get('/api/dashboard/recent-orders', authenticateToken, (req, res) => {
   db.all(`SELECT * FROM orders 
           ORDER BY created_at DESC 
           LIMIT 5`, (err, rows) => {
@@ -365,7 +1290,8 @@ app.get('/api/orders/today', (req, res) => {
     
     const orders = rows.map(order => ({
       ...order,
-      items: JSON.parse(order.items)
+      items: JSON.parse(order.items),
+      extras: order.extras ? JSON.parse(order.extras) : []
     }));
     
     res.json(orders);
@@ -566,8 +1492,47 @@ app.put('/api/orders/:id', (req, res) => {
   });
 });
 
-// Delete order
-app.delete('/api/orders/:id', (req, res) => {
+// Lock order (no PIN required)
+app.post('/api/orders/:id/lock', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  
+  db.run(`UPDATE orders SET is_locked = 1, locked_by = ?, locked_at = CURRENT_TIMESTAMP WHERE id = ?`,
+         [req.user.id, id], function(err) {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    
+    logPinOperation(req.user.id, 'ORDER_LOCKED', id, 'ORDER', 
+                   `Order ${id} locked`, ipAddress);
+    
+    io.emit('order_updated');
+    res.json({ message: 'Order locked successfully' });
+  });
+});
+
+app.post('/api/orders/:id/unlock', authenticateToken, verifyOwnerPin, (req, res) => {
+  const { id } = req.params;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  
+  db.run(`UPDATE orders SET is_locked = 0, locked_by = NULL, locked_at = NULL WHERE id = ?`,
+         [id], function(err) {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    
+    logPinOperation(req.user.id, 'ORDER_UNLOCKED', id, 'ORDER', 
+                   `Order ${id} unlocked`, ipAddress);
+    
+    io.emit('order_updated');
+    res.json({ message: 'Order unlocked successfully' });
+  });
+});
+
+// Delete order (requires PIN)
+app.delete('/api/orders/:id', authenticateToken, verifyOwnerPin, (req, res) => {
   const { id } = req.params;
   
   // First get the order to restore inventory
@@ -697,7 +1662,46 @@ app.put('/api/expenditures/:id/payment', (req, res) => {
   });
 });
 
-app.delete('/api/expenditures/:id', (req, res) => {
+// Lock/Unlock expenditure (requires PIN)
+app.post('/api/expenditures/:id/lock', authenticateToken, verifyOwnerPin, (req, res) => {
+  const { id } = req.params;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  
+  db.run(`UPDATE expenditures SET is_locked = 1, locked_by = ?, locked_at = CURRENT_TIMESTAMP WHERE id = ?`,
+         [req.user.id, id], function(err) {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    
+    logPinOperation(req.user.id, 'EXPENDITURE_LOCKED', id, 'EXPENDITURE', 
+                   `Expenditure ${id} locked`, ipAddress);
+    
+    io.emit('expenditure_updated');
+    res.json({ message: 'Expenditure locked successfully' });
+  });
+});
+
+app.post('/api/expenditures/:id/unlock', authenticateToken, verifyOwnerPin, (req, res) => {
+  const { id } = req.params;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  
+  db.run(`UPDATE expenditures SET is_locked = 0, locked_by = NULL, locked_at = NULL WHERE id = ?`,
+         [id], function(err) {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    
+    logPinOperation(req.user.id, 'EXPENDITURE_UNLOCKED', id, 'EXPENDITURE', 
+                   `Expenditure ${id} unlocked`, ipAddress);
+    
+    io.emit('expenditure_updated');
+    res.json({ message: 'Expenditure unlocked successfully' });
+  });
+});
+
+app.delete('/api/expenditures/:id', authenticateToken, verifyOwnerPin, (req, res) => {
   const { id } = req.params;
   
   db.run('DELETE FROM expenditures WHERE id = ?', [id], function(err) {
@@ -711,52 +1715,51 @@ app.delete('/api/expenditures/:id', (req, res) => {
   });
 });
 
-app.post('/api/orders', async (req, res) => {
-  const { items, total_amount } = req.body;
+app.post('/api/orders', authenticateToken, async (req, res) => {
+  const { items, extras = [], total_amount, payment_method = 'cash' } = req.body;
   
   try {
     const orderId = await generateOrderId();
   
-    // Process inventory deduction
-    for (const orderItem of items) {
-      // Get menu item ingredients
-      const menuItem = await new Promise((resolve, reject) => {
-        db.get('SELECT ingredients FROM menu_items WHERE id = ?', [orderItem.menu_item_id], (err, row) => {
-          if (err) reject(err);
-          else resolve(row);
-        });
-      });
+    // TODO: Process inventory deduction (temporarily disabled for testing)
+    // for (const orderItem of items) {
+    //   // Get menu item ingredients
+    //   const menuItem = await new Promise((resolve, reject) => {
+    //     db.get('SELECT ingredients FROM menu_items WHERE id = ?', [orderItem.menu_item_id], (err, row) => {
+    //       if (err) reject(err);
+    //       else resolve(row);
+    //     });
+    //   });
       
-      if (menuItem) {
-        const ingredients = JSON.parse(menuItem.ingredients);
+    //   if (menuItem) {
+    //     const ingredients = JSON.parse(menuItem.ingredients);
         
-        // Deduct ingredients from inventory
-        for (const ingredient of ingredients) {
-          const totalNeeded = ingredient.quantity * orderItem.quantity;
+    //     // Deduct ingredients from inventory
+    //     for (const ingredient of ingredients) {
+    //       const totalNeeded = ingredient.quantity * orderItem.quantity;
           
-          await new Promise((resolve, reject) => {
-            db.run(`UPDATE inventory 
-                    SET quantity = quantity - ? 
-                    WHERE name = ? AND quantity >= ?`, 
-                    [totalNeeded, ingredient.name, totalNeeded], function(err) {
-              if (err) reject(err);
-              else resolve();
-            });
-          });
-        }
-      }
-    }
+    //       await new Promise((resolve, reject) => {
+    //         db.run(`UPDATE inventory 
+    //                 SET quantity = quantity - ? 
+    //                 WHERE name = ? AND quantity >= ?`, 
+    //                 [totalNeeded, ingredient.name, totalNeeded], function(err) {
+    //           if (err) reject(err);
+    //           else resolve();
+    //         });
+    //       });
+    //     }
+    //   }
+    // }
     
     // Save order
-    db.run(`INSERT INTO orders (id, items, total_amount) VALUES (?, ?, ?)`, 
-           [orderId, JSON.stringify(items), total_amount], function(err) {
+    db.run(`INSERT INTO orders (id, items, extras, total_amount, payment_method, created_by) VALUES (?, ?, ?, ?, ?, ?)`, 
+           [orderId, JSON.stringify(items), JSON.stringify(extras), total_amount, payment_method, req.user.id], function(err) {
       if (err) {
         res.status(500).json({ error: err.message });
         return;
       }
-      
       io.emit('inventory_updated');
-      io.emit('new_order', { id: orderId, items, total_amount });
+      io.emit('new_order', { id: orderId, items, extras, total_amount });
       io.emit('sales_updated');
       res.json({ id: orderId, message: 'Order processed successfully' });
     });
@@ -776,8 +1779,107 @@ io.on('connection', (socket) => {
 });
 
 // Serve React app
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+// app.get('*', (req, res) => {
+//   res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+// });
+
+// Debug endpoint to check user data
+app.get('/api/admin/debug-users', (req, res) => {
+  db.all("SELECT id, username, role, pin FROM users", (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to fetch users' });
+    }
+    res.json(rows);
+  });
+});
+
+// Admin endpoint to keep only cheese extras
+app.post('/api/admin/keep-only-cheese', (req, res) => {
+  db.run("UPDATE menu_extras SET active = 0 WHERE name != 'Extra Cheese Slice'", (err) => {
+    if (err) {
+      return res.status(500).json({ error: 'Failed to update extras' });
+    }
+    res.json({ message: 'Updated extras successfully' });
+  });
+});
+
+// Debug PIN verification endpoint
+app.post('/api/admin/debug-pin', authenticateToken, (req, res) => {
+  const { pin } = req.body;
+  console.log('Debug PIN request:', {
+    userId: req.user.id,
+    username: req.user.username,
+    role: req.user.role,
+    pinReceived: pin,
+    pinLength: pin ? pin.length : 0
+  });
+  
+  db.get("SELECT pin FROM users WHERE id = ?", [req.user.id], (err, userRow) => {
+    if (err) {
+      console.log('Database error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    console.log('User PIN from DB:', userRow ? 'Found' : 'Not found');
+    
+    if (userRow && bcrypt.compareSync(pin, userRow.pin)) {
+      console.log('PIN match: SUCCESS');
+      res.json({ success: true, message: 'PIN verified' });
+    } else {
+      console.log('PIN match: FAILED');
+      res.json({ success: false, message: 'Invalid PIN' });
+    }
+  });
+});
+
+// Reset database endpoint (for development)
+app.post('/api/admin/reset-database', (req, res) => {
+  try {
+    // Delete all users
+    db.run("DELETE FROM users", (err) => {
+      if (err) {
+        console.error('Error deleting users:', err);
+        return res.status(500).json({ error: 'Failed to reset users' });
+      }
+      
+      // Reset restaurant settings
+      db.run("DELETE FROM restaurant_settings", (err) => {
+        if (err) {
+          console.error('Error deleting restaurant settings:', err);
+          return res.status(500).json({ error: 'Failed to reset settings' });
+        }
+        
+        // Delete all orders
+        db.run("DELETE FROM orders", (err) => {
+          if (err) {
+            console.error('Error deleting orders:', err);
+            return res.status(500).json({ error: 'Failed to reset orders' });
+          }
+          
+          // Delete all expenditures
+          db.run("DELETE FROM expenditures", (err) => {
+            if (err) {
+              console.error('Error deleting expenditures:', err);
+              return res.status(500).json({ error: 'Failed to reset expenditures' });
+            }
+            
+            // Delete all activity logs
+            db.run("DELETE FROM user_activity_logs", (err) => {
+              if (err) {
+                console.error('Error deleting activity logs:', err);
+                return res.status(500).json({ error: 'Failed to reset activity logs' });
+              }
+              
+              res.json({ message: 'Database reset successfully' });
+            });
+          });
+        });
+      });
+    });
+  } catch (error) {
+    console.error('Error resetting database:', error);
+    res.status(500).json({ error: 'Failed to reset database' });
+  }
 });
 
 const PORT = process.env.PORT || 5000;
