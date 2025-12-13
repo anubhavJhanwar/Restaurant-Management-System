@@ -141,7 +141,7 @@ module.exports = (req, res) => {
       }
       
       if (method === 'POST') {
-        const { description, amount, category } = req.body;
+        const { description, amount, category, supplier } = req.body;
         
         if (description && amount && category) {
           expenditures.push({
@@ -149,12 +149,86 @@ module.exports = (req, res) => {
             description,
             amount: parseFloat(amount),
             category,
+            supplier: supplier || '',
+            payment_status: 'pending',
             created_at: new Date().toISOString()
           });
-          return res.json({ message: 'Expenditure added' });
+          return res.json({ message: 'Expenditure added successfully' });
         }
         
-        return res.status(400).json({ error: 'Invalid data' });
+        return res.status(400).json({ error: 'Description, amount, and category required' });
+      }
+    }
+
+    // Orders endpoints
+    if (url === '/api/orders' || url === '/api/orders/today') {
+      if (method === 'GET') {
+        const orders = []; // Empty for now, will be populated when orders are created
+        return res.json(orders);
+      }
+      
+      if (method === 'POST') {
+        const newOrder = {
+          id: uuidv4(),
+          ...req.body,
+          created_at: new Date().toISOString()
+        };
+        return res.json({ message: 'Order created successfully', order: newOrder });
+      }
+    }
+
+    // Menu extras endpoint (for cheese slice add-on)
+    if (url === '/api/menu-extras') {
+      if (method === 'GET') {
+        const extras = [
+          {
+            id: '1',
+            name: 'Extra Cheese Slice',
+            price: 15,
+            category: 'Add-ons',
+            active: true
+          }
+        ];
+        return res.json(extras);
+      }
+    }
+
+    // Dashboard stats endpoint
+    if (url === '/api/dashboard/stats') {
+      if (method === 'GET') {
+        const stats = {
+          total_sales: 0,
+          total_orders: 0,
+          today_sales: 0,
+          today_orders: 0
+        };
+        return res.json(stats);
+      }
+    }
+
+    // Dashboard hourly sales
+    if (url === '/api/dashboard/hourly-sales') {
+      if (method === 'GET') {
+        const hourlySales = [];
+        for (let i = 0; i < 24; i++) {
+          hourlySales.push({
+            hour: i,
+            sales: Math.floor(Math.random() * 1000) // Demo data
+          });
+        }
+        return res.json(hourlySales);
+      }
+    }
+
+    // Dashboard top products
+    if (url === '/api/dashboard/top-products') {
+      if (method === 'GET') {
+        const topProducts = menuItems.slice(0, 5).map((item, index) => ({
+          name: item.name,
+          quantity: Math.floor(Math.random() * 50) + 10,
+          revenue: item.price * (Math.floor(Math.random() * 50) + 10)
+        }));
+        return res.json(topProducts);
       }
     }
 
