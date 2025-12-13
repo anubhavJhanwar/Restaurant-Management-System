@@ -18,7 +18,6 @@ const Expenditures = () => {
   useEffect(() => {
     // Initialize socket connection
     const newSocket = io('http://localhost:5000');
-    setSocket(newSocket);
 
     // Fetch initial data
     fetchExpenditures();

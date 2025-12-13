@@ -12,7 +12,6 @@ const TodaysOrders = () => {
   const [showBillModal, setShowBillModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [editingOrder, setEditingOrder] = useState(null);
-  const [socket, setSocket] = useState(null);
   const [newOrder, setNewOrder] = useState({
     items: [], // Each item will have its own extras: {id, name, price, quantity, extras: []}
     total_amount: 0,
@@ -28,7 +27,6 @@ const TodaysOrders = () => {
   useEffect(() => {
     // Initialize socket connection
     const newSocket = io('http://localhost:5000');
-    setSocket(newSocket);
 
     // Fetch initial data
     fetchTodaysOrders();

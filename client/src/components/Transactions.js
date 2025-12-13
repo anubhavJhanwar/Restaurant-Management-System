@@ -7,12 +7,9 @@ const Transactions = () => {
   const [filteredTransactions, setFilteredTransactions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
-  const [socket, setSocket] = useState(null);
-
   useEffect(() => {
     // Initialize socket connection
     const newSocket = io('http://localhost:5000');
-    setSocket(newSocket);
 
     // Fetch initial data
     fetchTransactions();

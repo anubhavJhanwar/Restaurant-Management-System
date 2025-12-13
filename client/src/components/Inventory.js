@@ -6,7 +6,6 @@ const Inventory = () => {
   const [inventory, setInventory] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-  const [socket, setSocket] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     quantity: '',
@@ -16,7 +15,6 @@ const Inventory = () => {
   useEffect(() => {
     // Initialize socket connection
     const newSocket = io('http://localhost:5000');
-    setSocket(newSocket);
 
     // Fetch initial inventory
     fetchInventory();
