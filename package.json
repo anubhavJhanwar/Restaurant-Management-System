@@ -1,6 +1,6 @@
 {
   "name": "burgerboss-restaurant",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "BurgerBoss - Professional Restaurant Management System",
   "main": "server.js",
   "scripts": {
