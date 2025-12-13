@@ -1,45 +1,140 @@
-// Simple working API for BurgerBoss
+// BurgerBoss API with Firebase Integration
 const { v4: uuidv4 } = require('uuid');
+const { db } = require('./firebase-config');
 
-// Simple in-memory storage (resets on function restart but works during session)
-let data = {
-  menuItems: [
-    {
-      id: '1',
-      name: 'Aloo Tikki Burger',
-      price: 80,
-      category: 'Burgers',
-      ingredients: [
-        { name: 'Aloo Patty', quantity: 1, unit: 'pieces' },
-        { name: 'Bun', quantity: 1, unit: 'pieces' },
-        { name: 'Cheese Slice', quantity: 1, unit: 'pieces' }
-      ],
-      active: true
-    },
-    {
-      id: '2',
-      name: 'Veg Burger',
-      price: 90,
-      category: 'Burgers',
-      ingredients: [
-        { name: 'Veg Patty', quantity: 1, unit: 'pieces' },
-        { name: 'Bun', quantity: 1, unit: 'pieces' },
-        { name: 'Cheese Slice', quantity: 1, unit: 'pieces' }
-      ],
-      active: true
+// Database service layer
+class DatabaseService {
+  // Menu Items
+  static async getMenuItems() {
+    try {
+      const snapshot = await db.collection('menuItems').get();
+      const items = [];
+      snapshot.forEach(doc => {
+        items.push({ id: doc.id, ...doc.data() });
+      });
+      
+      // Return default items if empty
+      if (items.length === 0) {
+        return [
+          {
+            id: '1',
+            name: 'Aloo Tikki Burger',
+            price: 80,
+            category: 'Burgers',
+            ingredients: [
+              { name: 'Aloo Patty', quantity: 1, unit: 'pieces' },
+              { name: 'Bun', quantity: 1, unit: 'pieces' },
+              { name: 'Cheese Slice', quantity: 1, unit: 'pieces' }
+            ],
+            active: true,
+            created_at: new Date().toISOString()
+          },
+          {
+            id: '2',
+            name: 'Veg Burger',
+            price: 90,
+            category: 'Burgers',
+            ingredients: [
+              { name: 'Veg Patty', quantity: 1, unit: 'pieces' },
+              { name: 'Bun', quantity: 1, unit: 'pieces' },
+              { name: 'Cheese Slice', quantity: 1, unit: 'pieces' }
+            ],
+            active: true,
+            created_at: new Date().toISOString()
+          }
+        ];
+      }
+      
+      return items;
+    } catch (error) {
+      console.error('Error getting menu items:', error);
+      return [];
     }
-  ],
-  inventory: [
-    { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces' },
-    { id: '2', name: 'Buns', quantity: 100, unit: 'pieces' },
-    { id: '3', name: 'Cheese Slices', quantity: 80, unit: 'pieces' },
-    { id: '4', name: 'Veg Patty', quantity: 30, unit: 'pieces' },
-    { id: '5', name: 'Paneer Patty', quantity: 25, unit: 'pieces' }
-  ],
-  expenditures: []
-};
+  }
 
-module.exports = (req, res) => {
+  static async addMenuItem(item) {
+    try {
+      const docRef = await db.collection('menuItems').add({
+        ...item,
+        created_at: new Date().toISOString()
+      });
+      return { id: docRef.id, ...item };
+    } catch (error) {
+      console.error('Error adding menu item:', error);
+      throw error;
+    }
+  }
+
+  // Inventory
+  static async getInventory() {
+    try {
+      const snapshot = await db.collection('inventory').get();
+      const items = [];
+      snapshot.forEach(doc => {
+        items.push({ id: doc.id, ...doc.data() });
+      });
+      
+      // Return default items if empty
+      if (items.length === 0) {
+        return [
+          { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces', low_stock_threshold: 10 },
+          { id: '2', name: 'Buns', quantity: 100, unit: 'pieces', low_stock_threshold: 20 },
+          { id: '3', name: 'Cheese Slices', quantity: 80, unit: 'pieces', low_stock_threshold: 15 },
+          { id: '4', name: 'Veg Patty', quantity: 30, unit: 'pieces', low_stock_threshold: 10 },
+          { id: '5', name: 'Paneer Patty', quantity: 25, unit: 'pieces', low_stock_threshold: 10 }
+        ];
+      }
+      
+      return items;
+    } catch (error) {
+      console.error('Error getting inventory:', error);
+      return [];
+    }
+  }
+
+  static async addInventoryItem(item) {
+    try {
+      const docRef = await db.collection('inventory').add({
+        ...item,
+        created_at: new Date().toISOString()
+      });
+      return { id: docRef.id, ...item };
+    } catch (error) {
+      console.error('Error adding inventory item:', error);
+      throw error;
+    }
+  }
+
+  // Expenditures
+  static async getExpenditures() {
+    try {
+      const snapshot = await db.collection('expenditures').get();
+      const items = [];
+      snapshot.forEach(doc => {
+        items.push({ id: doc.id, ...doc.data() });
+      });
+      return items;
+    } catch (error) {
+      console.error('Error getting expenditures:', error);
+      return [];
+    }
+  }
+
+  static async addExpenditure(item) {
+    try {
+      const docRef = await db.collection('expenditures').add({
+        ...item,
+        created_at: new Date().toISOString()
+      });
+      return { id: docRef.id, ...item };
+    } catch (error) {
+      console.error('Error adding expenditure:', error);
+      throw error;
+    }
+  }
+}
+
+module.exports = async (req, res) => {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
@@ -50,13 +145,11 @@ module.exports = (req, res) => {
   }
 
   const { url, method, body } = req;
-  
-  console.log('API Request:', method, url, body); // Debug logging
 
   try {
     // Test endpoint
     if (url === '/api/test') {
-      return res.json({ message: 'API Working!' });
+      return res.json({ message: 'BurgerBoss API with Firebase - Working!', timestamp: new Date().toISOString() });
     }
 
     // Auth endpoint
@@ -77,19 +170,18 @@ module.exports = (req, res) => {
     // Menu endpoints
     if (url === '/api/menu') {
       if (method === 'GET') {
-        return res.json(data.menuItems);
+        const menuItems = await DatabaseService.getMenuItems();
+        return res.json(menuItems);
       }
       
       if (method === 'POST') {
-        console.log('Menu POST body:', body); // Debug
-        
         const { name, price, category, ingredients, items } = body || {};
         
         // Handle bulk upload
         if (items && Array.isArray(items)) {
-          items.forEach(item => {
-            data.menuItems.push({
-              id: uuidv4(),
+          const results = [];
+          for (const item of items) {
+            const newItem = {
               name: item.name,
               price: parseFloat(item.price) || 0,
               category: item.category || 'Burgers',
@@ -98,15 +190,17 @@ module.exports = (req, res) => {
                 { name: item.name + ' Patty', quantity: 1, unit: 'pieces' }
               ],
               active: true
-            });
-          });
-          return res.json({ message: `${items.length} items added successfully` });
+            };
+            
+            const result = await DatabaseService.addMenuItem(newItem);
+            results.push(result);
+          }
+          return res.json({ message: `${results.length} items added successfully`, items: results });
         }
         
         // Handle single item
         if (name && price) {
           const newItem = {
-            id: uuidv4(),
             name: name,
             price: parseFloat(price),
             category: category || 'Burgers',
@@ -117,8 +211,8 @@ module.exports = (req, res) => {
             active: true
           };
           
-          data.menuItems.push(newItem);
-          return res.json({ message: 'Menu item added successfully', item: newItem });
+          const result = await DatabaseService.addMenuItem(newItem);
+          return res.json({ message: 'Menu item added successfully', item: result });
         }
         
         return res.status(400).json({ error: 'Name and price required' });
@@ -128,21 +222,23 @@ module.exports = (req, res) => {
     // Inventory endpoints
     if (url === '/api/inventory') {
       if (method === 'GET') {
-        return res.json(data.inventory);
+        const inventory = await DatabaseService.getInventory();
+        return res.json(inventory);
       }
       
       if (method === 'POST') {
-        const { name, quantity, unit } = body || {};
+        const { name, quantity, unit, low_stock_threshold } = body || {};
         
         if (name && quantity && unit) {
-          data.inventory.push({
-            id: uuidv4(),
+          const newItem = {
             name,
             quantity: parseFloat(quantity),
             unit,
-            low_stock_threshold: 10
-          });
-          return res.json({ message: 'Inventory item added successfully' });
+            low_stock_threshold: parseFloat(low_stock_threshold) || 10
+          };
+          
+          const result = await DatabaseService.addInventoryItem(newItem);
+          return res.json({ message: 'Inventory item added successfully', item: result });
         }
         
         return res.status(400).json({ error: 'Name, quantity, and unit required' });
@@ -152,29 +248,26 @@ module.exports = (req, res) => {
     // Expenditures endpoints
     if (url === '/api/expenditures') {
       if (method === 'GET') {
-        return res.json(data.expenditures);
+        const expenditures = await DatabaseService.getExpenditures();
+        return res.json(expenditures);
       }
       
       if (method === 'POST') {
-        console.log('Expenditure POST body:', body); // Debug
-        
         const { description, amount, category, supplier } = body || {};
         
         if (description && amount && category) {
           const newExpenditure = {
-            id: uuidv4(),
             description,
             amount: parseFloat(amount),
             category,
             supplier: supplier || '',
-            payment_status: 'pending',
-            created_at: new Date().toISOString()
+            payment_status: 'pending'
           };
           
-          data.expenditures.push(newExpenditure);
+          const result = await DatabaseService.addExpenditure(newExpenditure);
           return res.json({ 
             message: 'Expenditure added successfully',
-            expenditure: newExpenditure
+            expenditure: result
           });
         }
         
@@ -185,79 +278,44 @@ module.exports = (req, res) => {
     // Orders endpoints
     if (url === '/api/orders' || url === '/api/orders/today') {
       if (method === 'GET') {
-        const orders = []; // Empty for now, will be populated when orders are created
-        return res.json(orders);
+        return res.json([]);
       }
       
       if (method === 'POST') {
-        const newOrder = {
-          id: uuidv4(),
-          ...req.body,
-          created_at: new Date().toISOString()
-        };
-        return res.json({ message: 'Order created successfully', order: newOrder });
+        return res.json({ message: 'Order created successfully' });
       }
     }
 
-    // Menu extras endpoint (for cheese slice add-on)
+    // Menu extras endpoint
     if (url === '/api/menu-extras') {
       if (method === 'GET') {
-        const extras = [
-          {
-            id: '1',
-            name: 'Extra Cheese Slice',
-            price: 15,
-            category: 'Add-ons',
-            active: true
-          }
-        ];
-        return res.json(extras);
+        return res.json([
+          { id: '1', name: 'Extra Cheese Slice', price: 15, category: 'Add-ons', active: true }
+        ]);
       }
     }
 
-    // Dashboard stats endpoint
+    // Dashboard endpoints
     if (url === '/api/dashboard/stats') {
-      if (method === 'GET') {
-        const stats = {
-          total_sales: 0,
-          total_orders: 0,
-          today_sales: 0,
-          today_orders: 0
-        };
-        return res.json(stats);
-      }
+      return res.json({ total_sales: 0, total_orders: 0, today_sales: 0, today_orders: 0 });
     }
 
-    // Dashboard hourly sales
     if (url === '/api/dashboard/hourly-sales') {
-      if (method === 'GET') {
-        const hourlySales = [];
-        for (let i = 0; i < 24; i++) {
-          hourlySales.push({
-            hour: i,
-            sales: Math.floor(Math.random() * 1000) // Demo data
-          });
-        }
-        return res.json(hourlySales);
-      }
+      const hourlySales = Array.from({ length: 24 }, (_, i) => ({
+        hour: i,
+        sales: Math.floor(Math.random() * 1000)
+      }));
+      return res.json(hourlySales);
     }
 
-    // Dashboard top products
     if (url === '/api/dashboard/top-products') {
-      if (method === 'GET') {
-        const topProducts = menuItems.slice(0, 5).map((item, index) => ({
-          name: item.name,
-          quantity: Math.floor(Math.random() * 50) + 10,
-          revenue: item.price * (Math.floor(Math.random() * 50) + 10)
-        }));
-        return res.json(topProducts);
-      }
+      return res.json([]);
     }
 
-    return res.status(404).json({ error: 'Not found' });
+    return res.status(404).json({ error: 'Endpoint not found' });
     
   } catch (error) {
-    console.error('Error:', error);
-    return res.status(500).json({ error: 'Server error' });
+    console.error('API Error:', error);
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 };
