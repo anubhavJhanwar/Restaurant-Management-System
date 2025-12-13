@@ -39,8 +39,7 @@ let db;
 
 // Initialize database
 function initDatabase() {
-  // For Vercel, you should use a cloud database like PlanetScale, Supabase, or Railway
-  // This is a temporary in-memory solution for demo purposes
+  // Use in-memory but create a default demo account
   db = new sqlite3.Database(':memory:');
   
   // Create tables
@@ -114,6 +113,23 @@ function initDatabase() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users (id)
     )`);
+
+    // Create default demo accounts
+    const demoUserId = uuidv4();
+    const demoPassword = bcrypt.hashSync('demo123', 10);
+    const demoPin = bcrypt.hashSync('1234', 10);
+    
+    db.run(
+      "INSERT INTO users (id, username, email, password, role, full_name, pin) VALUES (?, ?, ?, ?, 'Owner', ?, ?)",
+      [demoUserId, 'demo', 'demo@burgerboss.com', demoPassword, 'Demo Owner', demoPin],
+      function(err) {
+        if (err) {
+          console.error('Error creating demo account:', err);
+        } else {
+          console.log('Demo account created: username=demo, password=demo123');
+        }
+      }
+    );
 
     console.log('Database initialized successfully');
   });
