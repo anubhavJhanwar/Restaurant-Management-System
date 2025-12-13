@@ -369,6 +369,27 @@ db.serialize(() => {
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  // Check if image_url column exists, add if it doesn't
+  db.all("PRAGMA table_info(menu_items)", (err, columns) => {
+    if (err) {
+      console.error('Error checking table schema:', err.message);
+      return;
+    }
+    
+    const hasImageUrl = columns.some(col => col.name === 'image_url');
+    if (!hasImageUrl) {
+      db.run(`ALTER TABLE menu_items ADD COLUMN image_url TEXT`, (alterErr) => {
+        if (alterErr) {
+          console.error('Error adding image_url column:', alterErr.message);
+        } else {
+          console.log('✅ Added image_url column to menu_items table');
+        }
+      });
+    } else {
+      console.log('✅ image_url column already exists in menu_items table');
+    }
+  });
+
   // Inventory table
   db.run(`CREATE TABLE IF NOT EXISTS inventory (
     id TEXT PRIMARY KEY,
@@ -978,6 +999,139 @@ app.delete('/api/admin/users/:userId', authenticateToken, authorizeRole(['Owner'
   });
 });
 
+// Clear transactions endpoint (Owner only with password)
+app.post('/api/admin/clear-transactions', authenticateToken, authorizeRole(['Owner']), (req, res) => {
+  const { password } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  
+  if (!password) {
+    return res.status(400).json({ error: 'Password is required to clear transactions' });
+  }
+  
+  // Verify password
+  db.get("SELECT password FROM users WHERE id = ?", [req.user.id], (err, userRow) => {
+    if (err) {
+      console.error('Error fetching user for password verification:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!userRow || !bcrypt.compareSync(password, userRow.password)) {
+      logUserActivity(req.user.id, 'CLEAR_TRANSACTIONS_FAILED', `Failed attempt to clear transactions from ${ipAddress}`, ipAddress);
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+    
+    // Clear all orders and transactions
+    db.run("DELETE FROM orders", (err) => {
+      if (err) {
+        console.error('Error clearing transactions:', err);
+        return res.status(500).json({ error: 'Failed to clear transactions' });
+      }
+      
+      logUserActivity(req.user.id, 'CLEAR_TRANSACTIONS', `All transactions cleared from ${ipAddress}`, ipAddress);
+      console.log(`All transactions cleared by ${req.user.username}`);
+      
+      // Emit socket event to refresh all dashboards
+      io.emit('transactions_cleared');
+      
+      res.json({ message: 'All transactions cleared successfully' });
+    });
+  });
+});
+
+// Reset entire database endpoint (Owner only with password)
+app.post('/api/admin/reset-database', authenticateToken, authorizeRole(['Owner']), (req, res) => {
+  const { password } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  
+  if (!password) {
+    return res.status(400).json({ error: 'Password is required to reset database' });
+  }
+  
+  // Verify password
+  db.get("SELECT password FROM users WHERE id = ?", [req.user.id], (err, userRow) => {
+    if (err) {
+      console.error('Error fetching user for password verification:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!userRow || !bcrypt.compareSync(password, userRow.password)) {
+      logUserActivity(req.user.id, 'RESET_DB_FAILED', `Failed attempt to reset database from ${ipAddress}`, ipAddress);
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+    
+    // Clear all data except current user
+    const currentUserId = req.user.id;
+    
+    db.serialize(() => {
+      db.run("DELETE FROM orders", (err) => {
+        if (err) console.error('Error clearing orders:', err);
+      });
+      
+      db.run("DELETE FROM expenditures", (err) => {
+        if (err) console.error('Error clearing expenditures:', err);
+      });
+      
+      db.run("DELETE FROM menu_items", (err) => {
+        if (err) console.error('Error clearing menu items:', err);
+      });
+      
+      db.run("DELETE FROM inventory", (err) => {
+        if (err) console.error('Error clearing inventory:', err);
+      });
+      
+      db.run("DELETE FROM users WHERE id != ?", [currentUserId], (err) => {
+        if (err) {
+          console.error('Error clearing other users:', err);
+          return res.status(500).json({ error: 'Failed to reset database' });
+        }
+        
+        logUserActivity(currentUserId, 'RESET_DATABASE', `Database reset from ${ipAddress}`, ipAddress);
+        console.log(`Database reset by ${req.user.username}`);
+        
+        // Emit socket event to refresh all clients
+        io.emit('database_reset');
+        
+        res.json({ message: 'Database reset successfully. Only your account remains.' });
+      });
+    });
+  });
+});
+
+// Delete own account endpoint (Owner only with password)
+app.delete('/api/admin/delete-own-account', authenticateToken, authorizeRole(['Owner']), (req, res) => {
+  const { password } = req.body;
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  
+  if (!password) {
+    return res.status(400).json({ error: 'Password is required to delete account' });
+  }
+  
+  // Verify password
+  db.get("SELECT password, username FROM users WHERE id = ?", [req.user.id], (err, userRow) => {
+    if (err) {
+      console.error('Error fetching user for password verification:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (!userRow || !bcrypt.compareSync(password, userRow.password)) {
+      logUserActivity(req.user.id, 'DELETE_ACCOUNT_FAILED', `Failed attempt to delete own account from ${ipAddress}`, ipAddress);
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+    
+    // Delete the user account
+    db.run("DELETE FROM users WHERE id = ?", [req.user.id], (err) => {
+      if (err) {
+        console.error('Error deleting own account:', err);
+        return res.status(500).json({ error: 'Failed to delete account' });
+      }
+      
+      console.log(`Account ${userRow.username} deleted by owner`);
+      
+      res.json({ message: 'Account deleted successfully' });
+    });
+  });
+});
+
 // PIN Management Routes
 app.post('/api/auth/verify-pin', authenticateToken, verifyOwnerPin, (req, res) => {
   res.json({ message: 'PIN verified successfully' });
@@ -1065,33 +1219,54 @@ app.put('/api/menu-extras/:id', authenticateToken, authorizeRole(['Owner', 'Defa
 app.get('/api/dashboard/stats', authenticateToken, (req, res) => {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format in local time
   
-  // Get real-time stats from orders table
+  // Get total stats (all time) and today's stats
   db.all(`SELECT 
     SUM(total_amount) as total_sales,
     COUNT(*) as total_orders
-    FROM orders WHERE DATE(datetime(created_at, 'localtime')) = ? AND payment_status = 'paid'`, [today], (err, rows) => {
+    FROM orders WHERE payment_status = 'paid'`, [], (err, totalRows) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
     }
     
-    const stats = rows[0] || { total_sales: 0, total_orders: 0 };
-    // Ensure numbers are not null
-    stats.total_sales = stats.total_sales || 0;
-    stats.total_orders = stats.total_orders || 0;
-    
-    res.json(stats);
+    // Get today's stats separately
+    db.all(`SELECT 
+      SUM(total_amount) as today_sales,
+      COUNT(*) as today_orders
+      FROM orders WHERE DATE(datetime(created_at, 'localtime')) = ? AND payment_status = 'paid'`, [today], (err, todayRows) => {
+      if (err) {
+        res.status(500).json({ error: err.message });
+        return;
+      }
+      
+      const totalStats = totalRows[0] || { total_sales: 0, total_orders: 0 };
+      const todayStats = todayRows[0] || { today_sales: 0, today_orders: 0 };
+      
+      // Ensure numbers are not null
+      totalStats.total_sales = totalStats.total_sales || 0;
+      totalStats.total_orders = totalStats.total_orders || 0;
+      todayStats.today_sales = todayStats.today_sales || 0;
+      todayStats.today_orders = todayStats.today_orders || 0;
+      
+      // Combine both stats
+      const stats = {
+        total_sales: totalStats.total_sales,
+        total_orders: totalStats.total_orders,
+        today_sales: todayStats.today_sales,
+        today_orders: todayStats.today_orders
+      };
+      
+      res.json(stats);
+    });
   });
 });
 
 // Get sales by category for pie chart
 // Get top selling products
 app.get('/api/dashboard/top-products', authenticateToken, (req, res) => {
-  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format in local time
-  
-  // Get top selling products from today's orders
-  db.all(`SELECT items FROM orders 
-          WHERE DATE(datetime(created_at, 'localtime')) = ? AND payment_status = 'paid'`, [today], async (err, orders) => {
+  // Get top selling products from all orders (overall data)
+  db.all(`SELECT items, id FROM orders 
+          WHERE payment_status = 'paid'`, [], async (err, orders) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -1150,16 +1325,15 @@ app.get('/api/dashboard/top-products', authenticateToken, (req, res) => {
 });
 
 app.get('/api/dashboard/hourly-sales', authenticateToken, (req, res) => {
-  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format in local time
-  
+  // Get overall sales data by hour (all time)
   db.all(`SELECT 
     strftime('%H', datetime(created_at, 'localtime')) as hour,
     COUNT(*) as transactions,
     SUM(total_amount) as sales
     FROM orders 
-    WHERE DATE(datetime(created_at, 'localtime')) = ? AND payment_status = 'paid'
+    WHERE payment_status = 'paid'
     GROUP BY strftime('%H', datetime(created_at, 'localtime'))
-    ORDER BY hour`, [today], (err, rows) => {
+    ORDER BY hour`, [], (err, rows) => {
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -1201,6 +1375,138 @@ app.get('/api/dashboard/recent-orders', authenticateToken, (req, res) => {
     }));
     
     res.json(orders);
+  });
+});
+
+// Get today's top selling products
+app.get('/api/dashboard/today-top-products', authenticateToken, (req, res) => {
+  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format in local time
+  
+  // Get top selling products from today's orders
+  db.all(`SELECT items, id FROM orders 
+          WHERE DATE(datetime(created_at, 'localtime')) = ? AND payment_status = 'paid'`, [today], async (err, orders) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    
+    const productStats = {};
+    
+    // Process each order
+    for (const order of orders) {
+      try {
+        const items = JSON.parse(order.items);
+        
+        // Process each item in the order
+        for (const item of items) {
+          // Get the menu item details
+          const menuItem = await new Promise((resolve, reject) => {
+            db.get(`SELECT name, category, price FROM menu_items WHERE id = ?`, [item.menu_item_id], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+          
+          if (menuItem) {
+            const key = `${menuItem.name}`;
+            if (!productStats[key]) {
+              productStats[key] = { 
+                name: menuItem.name,
+                category: menuItem.category || 'Other',
+                price: menuItem.price,
+                quantity: 0, 
+                sales: 0,
+                orders: new Set()
+              };
+            }
+            productStats[key].quantity += item.quantity;
+            productStats[key].sales += item.price * item.quantity;
+            productStats[key].orders.add(order.id);
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing order items:', e);
+      }
+    }
+    
+    // Convert to array and sort by quantity
+    const result = Object.values(productStats)
+      .map(item => ({
+        ...item,
+        orders: item.orders.size
+      }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 3); // Top 3 products for today
+    
+    res.json(result);
+  });
+});
+
+// Get ingredient consumption statistics
+app.get('/api/dashboard/ingredient-consumption', authenticateToken, (req, res) => {
+  // Get all paid orders
+  db.all(`SELECT items FROM orders WHERE payment_status = 'paid'`, [], async (err, orders) => {
+    if (err) {
+      res.status(500).json({ error: err.message });
+      return;
+    }
+    
+    const ingredientConsumption = {};
+    
+    // Process each order
+    for (const order of orders) {
+      try {
+        const items = JSON.parse(order.items);
+        
+        // Process each item in the order
+        for (const item of items) {
+          // Get the menu item details and ingredients
+          const menuItem = await new Promise((resolve, reject) => {
+            db.get(`SELECT ingredients FROM menu_items WHERE id = ?`, [item.menu_item_id], (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            });
+          });
+          
+          if (menuItem && menuItem.ingredients) {
+            const ingredients = JSON.parse(menuItem.ingredients);
+            
+            // Calculate consumption for each ingredient
+            for (const ingredient of ingredients) {
+              const key = ingredient.name;
+              if (!ingredientConsumption[key]) {
+                ingredientConsumption[key] = {
+                  name: ingredient.name,
+                  totalConsumed: 0,
+                  unit: 'units' // Default unit
+                };
+              }
+              ingredientConsumption[key].totalConsumed += ingredient.quantity * item.quantity;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing order items:', e);
+      }
+    }
+    
+    // Get inventory units for better display
+    db.all(`SELECT name, unit FROM inventory`, [], (err, inventoryItems) => {
+      if (!err) {
+        inventoryItems.forEach(invItem => {
+          if (ingredientConsumption[invItem.name]) {
+            ingredientConsumption[invItem.name].unit = invItem.unit || 'units';
+          }
+        });
+      }
+      
+      // Convert to array and sort by consumption
+      const result = Object.values(ingredientConsumption)
+        .sort((a, b) => b.totalConsumed - a.totalConsumed)
+        .slice(0, 8); // Top 8 consumed ingredients
+      
+      res.json(result);
+    });
   });
 });
 
@@ -1320,14 +1626,30 @@ app.get('/api/orders/history', (req, res) => {
 });
 
 // Add menu item
-app.post('/api/menu', upload.single('image'), (req, res) => {
+app.post('/api/menu', authenticateToken, upload.single('image'), (req, res) => {
   const { name, price, category, ingredients } = req.body;
   const id = uuidv4();
   const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
   
+  // Try with image_url first, fallback without it if column doesn't exist
   db.run(`INSERT INTO menu_items (id, name, price, category, ingredients, image_url) 
           VALUES (?, ?, ?, ?, ?, ?)`, 
           [id, name, price, category, ingredients, imageUrl], function(err) {
+    if (err && err.message.includes('no column named image_url')) {
+      // Fallback: insert without image_url column
+      db.run(`INSERT INTO menu_items (id, name, price, category, ingredients) 
+              VALUES (?, ?, ?, ?, ?)`, 
+              [id, name, price, category, ingredients], function(fallbackErr) {
+        if (fallbackErr) {
+          res.status(500).json({ error: fallbackErr.message });
+          return;
+        }
+        
+        io.emit('menu_updated');
+        res.json({ id, message: 'Menu item added successfully (without image)' });
+      });
+      return;
+    }
     if (err) {
       res.status(500).json({ error: err.message });
       return;
@@ -1339,7 +1661,7 @@ app.post('/api/menu', upload.single('image'), (req, res) => {
 });
 
 // Update menu item (with optional image)
-app.put('/api/menu/:id', (req, res) => {
+app.put('/api/menu/:id', authenticateToken, (req, res) => {
   // Check if request has multipart data (image upload)
   const contentType = req.headers['content-type'];
   
@@ -1415,7 +1737,7 @@ app.put('/api/menu/:id', (req, res) => {
 });
 
 // Delete menu item
-app.delete('/api/menu/:id', (req, res) => {
+app.delete('/api/menu/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
   
   db.run('DELETE FROM menu_items WHERE id = ?', [id], function(err) {
@@ -1430,7 +1752,7 @@ app.delete('/api/menu/:id', (req, res) => {
 });
 
 // Bulk add menu items from Excel
-app.post('/api/menu/bulk', (req, res) => {
+app.post('/api/menu/bulk', authenticateToken, (req, res) => {
   const { items } = req.body;
   
   const insertPromises = items.map(item => {

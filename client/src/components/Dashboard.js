@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Edit3, Trash2 } from 'lucide-react';
 import io from 'socket.io-client';
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
     total_sales: 0,
-    total_orders: 0
+    total_orders: 0,
+    today_sales: 0,
+    today_orders: 0
   });
   const [hourlyData, setHourlyData] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
+  const [todayTopProducts, setTodayTopProducts] = useState([]);
+  const [ingredientConsumption, setIngredientConsumption] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [socket, setSocket] = useState(null);
 
@@ -22,6 +26,8 @@ const Dashboard = () => {
     fetchDashboardStats();
     fetchHourlyData();
     fetchTopProducts();
+    fetchTodayTopProducts();
+    fetchIngredientConsumption();
     fetchRecentOrders();
 
     // Listen for real-time updates
@@ -29,6 +35,8 @@ const Dashboard = () => {
       fetchDashboardStats();
       fetchHourlyData();
       fetchTopProducts();
+      fetchTodayTopProducts();
+      fetchIngredientConsumption();
       fetchRecentOrders();
     });
 
@@ -36,6 +44,8 @@ const Dashboard = () => {
       fetchDashboardStats();
       fetchHourlyData();
       fetchTopProducts();
+      fetchTodayTopProducts();
+      fetchIngredientConsumption();
       fetchRecentOrders();
     });
 
@@ -55,10 +65,10 @@ const Dashboard = () => {
         }
       });
       const data = await response.json();
-      setStats(data || { total_sales: 0, total_orders: 0 });
+      setStats(data || { total_sales: 0, total_orders: 0, today_sales: 0, today_orders: 0 });
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
-      setStats({ total_sales: 0, total_orders: 0 });
+      setStats({ total_sales: 0, total_orders: 0, today_sales: 0, today_orders: 0 });
     }
   };
 
@@ -108,6 +118,38 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error fetching recent orders:', error);
       setRecentOrders([]); // Set empty array on error
+    }
+  };
+
+  const fetchTodayTopProducts = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/dashboard/today-top-products', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      setTodayTopProducts(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching today top products:', error);
+      setTodayTopProducts([]);
+    }
+  };
+
+  const fetchIngredientConsumption = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/dashboard/ingredient-consumption', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await response.json();
+      setIngredientConsumption(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching ingredient consumption:', error);
+      setIngredientConsumption([]);
     }
   };
 
@@ -176,7 +218,7 @@ const Dashboard = () => {
           <div className="stat-value">{formatCurrency(stats.total_sales || 0)}</div>
           <div className="stat-change">
             <TrendingUp size={16} />
-            Today's Revenue
+            All Time Revenue
           </div>
         </div>
         
@@ -185,14 +227,32 @@ const Dashboard = () => {
           <div className="stat-value">{stats.total_orders || 0}</div>
           <div className="stat-change">
             <TrendingUp size={16} />
-            Orders Completed
+            All Time Orders
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-label">Today's Sales</div>
+          <div className="stat-value">{formatCurrency(stats.today_sales || 0)}</div>
+          <div className="stat-change">
+            <TrendingUp size={16} />
+            Today's Revenue
+          </div>
+        </div>
+        
+        <div className="stat-card">
+          <div className="stat-label">Today's Orders</div>
+          <div className="stat-value">{stats.today_orders || 0}</div>
+          <div className="stat-change">
+            <TrendingUp size={16} />
+            Today's Count
           </div>
         </div>
       </div>
 
       <div className="charts-grid">
         <div className="chart-card">
-          <h3 className="chart-title">Hourly Transaction Amount</h3>
+          <h3 className="chart-title">Overall Sales by Hour (All Time)</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={hourlyData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -238,7 +298,7 @@ const Dashboard = () => {
         </div>
 
         <div className="chart-card">
-          <h3 className="chart-title">🏆 Top Selling Products Today</h3>
+          <h3 className="chart-title">🏆 Top Selling Products (All Time)</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '20px' }}>
             {topProducts.length === 0 ? (
               <div style={{ 
@@ -364,6 +424,148 @@ const Dashboard = () => {
                       }}>
                         Orders
                       </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* New sections grid */}
+      <div className="charts-grid">
+        {/* Today's Top Products */}
+        <div className="chart-card">
+          <h3 className="chart-title">🔥 Today's Top Sellers</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px' }}>
+            {todayTopProducts.length === 0 ? (
+              <div style={{ 
+                textAlign: 'center', 
+                color: '#666', 
+                padding: '30px 20px',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '12px',
+                border: '2px dashed #e9ecef'
+              }}>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🌅</div>
+                <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>No Sales Today Yet</div>
+                <div style={{ fontSize: '12px' }}>Start taking orders to see today's top products!</div>
+              </div>
+            ) : (
+              todayTopProducts.map((product, index) => (
+                <div key={index} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  backgroundColor: '#f0fdf4',
+                  borderRadius: '10px',
+                  border: '1px solid #bbf7d0',
+                  transition: 'all 0.3s ease'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px'
+                  }}>
+                    <div style={{
+                      backgroundColor: '#22c55e',
+                      color: 'white',
+                      width: '20px',
+                      height: '20px',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '10px',
+                      fontWeight: '700'
+                    }}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>
+                        {product.name}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#666' }}>
+                        {product.category}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#22c55e' }}>
+                      {product.quantity} sold
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#666' }}>
+                      {formatCurrency(product.sales)}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Ingredient Consumption */}
+        <div className="chart-card">
+          <h3 className="chart-title">📊 Ingredient Consumption</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '20px' }}>
+            {ingredientConsumption.length === 0 ? (
+              <div style={{ 
+                textAlign: 'center', 
+                color: '#666', 
+                padding: '30px 20px',
+                backgroundColor: '#f8f9fa',
+                borderRadius: '12px',
+                border: '2px dashed #e9ecef'
+              }}>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🥘</div>
+                <div style={{ fontSize: '14px', fontWeight: '500', marginBottom: '4px' }}>No Consumption Data</div>
+                <div style={{ fontSize: '12px' }}>Process orders to see ingredient usage!</div>
+              </div>
+            ) : (
+              ingredientConsumption.map((ingredient, index) => (
+                <div key={index} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  backgroundColor: '#fff7ed',
+                  borderRadius: '8px',
+                  border: '1px solid #fed7aa',
+                  transition: 'all 0.3s ease'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}>
+                    <div style={{
+                      backgroundColor: '#ff8c42',
+                      color: 'white',
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '9px',
+                      fontWeight: '700'
+                    }}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#333' }}>
+                        {ingredient.name}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#ff8c42' }}>
+                      {ingredient.totalConsumed.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#666', textTransform: 'uppercase' }}>
+                      {ingredient.unit}
                     </div>
                   </div>
                 </div>

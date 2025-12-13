@@ -227,6 +227,17 @@ const Settings = () => {
   const [users, setUsers] = useState([]);
   const [userCounts, setUserCounts] = useState({ owner: 0, default: 0, total: 0 });
   const [loadingUsers, setLoadingUsers] = useState(false);
+  
+  // Modal states for admin actions
+  const [showClearTransactionsModal, setShowClearTransactionsModal] = useState(false);
+  const [showResetDatabaseModal, setShowResetDatabaseModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminActionLoading, setAdminActionLoading] = useState(false);
+  
+  // Message states for better UX
+  const [adminMessage, setAdminMessage] = useState('');
+  const [adminMessageType, setAdminMessageType] = useState(''); // 'success' or 'error'
 
   // Load settings from localStorage on component mount
   useEffect(() => {
@@ -818,6 +829,135 @@ const Settings = () => {
     }
   }, [activeSection]);
 
+  // Admin action functions
+  const handleClearTransactions = async () => {
+    if (!adminPassword) {
+      setAdminMessage('Password is required');
+      setAdminMessageType('error');
+      return;
+    }
+    
+    setAdminActionLoading(true);
+    setAdminMessage('');
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/admin/clear-transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ password: adminPassword })
+      });
+      
+      if (response.ok) {
+        setAdminMessage('All transactions cleared successfully!');
+        setAdminMessageType('success');
+        setTimeout(() => {
+          setShowClearTransactionsModal(false);
+          setAdminPassword('');
+          setAdminMessage('');
+        }, 2000);
+      } else {
+        const error = await response.json();
+        setAdminMessage(`Failed to clear transactions: ${error.error}`);
+        setAdminMessageType('error');
+      }
+    } catch (error) {
+      console.error('Error clearing transactions:', error);
+      setAdminMessage('Error clearing transactions. Please try again.');
+      setAdminMessageType('error');
+    } finally {
+      setAdminActionLoading(false);
+    }
+  };
+
+  const handleResetDatabase = async () => {
+    if (!adminPassword) {
+      setAdminMessage('Password is required');
+      setAdminMessageType('error');
+      return;
+    }
+    
+    setAdminActionLoading(true);
+    setAdminMessage('');
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/admin/reset-database', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ password: adminPassword })
+      });
+      
+      if (response.ok) {
+        setAdminMessage('Database reset successfully! Only your account remains.');
+        setAdminMessageType('success');
+        setTimeout(() => {
+          setShowResetDatabaseModal(false);
+          setAdminPassword('');
+          setAdminMessage('');
+        }, 2000);
+      } else {
+        const error = await response.json();
+        setAdminMessage(`Failed to reset database: ${error.error}`);
+        setAdminMessageType('error');
+      }
+    } catch (error) {
+      console.error('Error resetting database:', error);
+      setAdminMessage('Error resetting database. Please try again.');
+      setAdminMessageType('error');
+    } finally {
+      setAdminActionLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!adminPassword) {
+      setAdminMessage('Password is required');
+      setAdminMessageType('error');
+      return;
+    }
+    
+    setAdminActionLoading(true);
+    setAdminMessage('');
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('http://localhost:5000/api/admin/delete-own-account', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ password: adminPassword })
+      });
+      
+      if (response.ok) {
+        setAdminMessage('Account deleted successfully. Logging out...');
+        setAdminMessageType('success');
+        setTimeout(() => {
+          localStorage.clear();
+          window.location.href = '/';
+        }, 2000);
+      } else {
+        const error = await response.json();
+        setAdminMessage(`Failed to delete account: ${error.error}`);
+        setAdminMessageType('error');
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      setAdminMessage('Error deleting account. Please try again.');
+      setAdminMessageType('error');
+    } finally {
+      setAdminActionLoading(false);
+    }
+  };
+
   const renderUserManagement = () => {
     // Get current user info
     const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -995,6 +1135,136 @@ const Settings = () => {
           color: '#0c4a6e'
         }}>
           <strong>Note:</strong> Create accounts from login page. Deletions are permanent.
+        </div>
+
+        {/* Admin Actions */}
+        <div style={{ marginTop: '30px' }}>
+          <h3 style={{ color: '#333', marginBottom: '15px', fontSize: '18px', borderTop: '1px solid #e5e7eb', paddingTop: '20px' }}>
+            🔧 Admin Actions
+          </h3>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+            {/* Clear Transactions */}
+            <div style={{
+              padding: '15px',
+              backgroundColor: '#fff7ed',
+              borderRadius: '8px',
+              border: '1px solid #fed7aa'
+            }}>
+              <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#ea580c', marginBottom: '8px' }}>
+                Clear All Transactions
+              </h4>
+              <p style={{ fontSize: '12px', color: '#9a3412', marginBottom: '12px' }}>
+                Remove all orders and transaction history. This cannot be undone.
+              </p>
+              <button
+                onClick={() => setShowClearTransactionsModal(true)}
+                style={{
+                  background: 'linear-gradient(135deg, #ea580c 0%, #dc2626 100%)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  boxShadow: '0 2px 8px rgba(234, 88, 12, 0.3)',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px)';
+                  e.target.style.boxShadow = '0 4px 12px rgba(234, 88, 12, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 2px 8px rgba(234, 88, 12, 0.3)';
+                }}
+              >
+                Clear Transactions
+              </button>
+            </div>
+
+            {/* Reset Database */}
+            <div style={{
+              padding: '15px',
+              backgroundColor: '#fef2f2',
+              borderRadius: '8px',
+              border: '1px solid #fecaca'
+            }}>
+              <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#dc2626', marginBottom: '8px' }}>
+                Reset Entire Database
+              </h4>
+              <p style={{ fontSize: '12px', color: '#991b1b', marginBottom: '12px' }}>
+                Clear all data except your account. Perfect for deployment setup.
+              </p>
+              <button
+                onClick={() => setShowResetDatabaseModal(true)}
+                style={{
+                  background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  boxShadow: '0 2px 8px rgba(220, 38, 38, 0.3)',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px)';
+                  e.target.style.boxShadow = '0 4px 12px rgba(220, 38, 38, 0.4)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0)';
+                  e.target.style.boxShadow = '0 2px 8px rgba(220, 38, 38, 0.3)';
+                }}
+              >
+                Reset Database
+              </button>
+            </div>
+          </div>
+
+          {/* Delete Own Account */}
+          <div style={{
+            marginTop: '15px',
+            padding: '15px',
+            backgroundColor: '#f3f4f6',
+            borderRadius: '8px',
+            border: '1px solid #d1d5db'
+          }}>
+            <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#374151', marginBottom: '8px' }}>
+              Delete My Account
+            </h4>
+            <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
+              Permanently delete your account. This action cannot be undone.
+            </p>
+            <button
+              onClick={() => setShowDeleteAccountModal(true)}
+              style={{
+                background: 'linear-gradient(135deg, #6b7280 0%, #374151 100%)',
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: '600',
+                boxShadow: '0 2px 8px rgba(107, 114, 128, 0.3)',
+                transition: 'all 0.3s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-1px)';
+                e.target.style.boxShadow = '0 4px 12px rgba(107, 114, 128, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = '0 2px 8px rgba(107, 114, 128, 0.3)';
+              }}
+            >
+              Delete Account
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1274,6 +1544,324 @@ const Settings = () => {
           </div>
         </div>
       </div>
+
+      {/* Clear Transactions Modal */}
+      {showClearTransactionsModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3 style={{ color: '#ea580c', marginBottom: '16px', fontSize: '18px' }}>
+              ⚠️ Clear All Transactions
+            </h3>
+            <p style={{ color: '#666', marginBottom: '20px', fontSize: '14px' }}>
+              This will permanently delete all orders and transaction history. This action cannot be undone.
+            </p>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#333' }}>
+                Enter your password to confirm:
+              </label>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Your account password"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e9ecef',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  outline: 'none'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#ea580c'}
+                onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
+              />
+            </div>
+            
+            {/* Message Display */}
+            {adminMessage && showClearTransactionsModal && (
+              <div style={{
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                backgroundColor: adminMessageType === 'success' ? '#f0fdf4' : '#fef2f2',
+                border: `1px solid ${adminMessageType === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                color: adminMessageType === 'success' ? '#16a34a' : '#dc2626',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}>
+                {adminMessage}
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowClearTransactionsModal(false);
+                  setAdminPassword('');
+                  setAdminMessage('');
+                }}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#f8f9fa',
+                  color: '#666',
+                  border: '1px solid #e9ecef',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleClearTransactions}
+                disabled={adminActionLoading}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#ea580c',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: adminActionLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  opacity: adminActionLoading ? 0.7 : 1
+                }}
+              >
+                {adminActionLoading ? 'Clearing...' : 'Clear Transactions'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Database Modal */}
+      {showResetDatabaseModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3 style={{ color: '#dc2626', marginBottom: '16px', fontSize: '18px' }}>
+              🚨 Reset Entire Database
+            </h3>
+            <p style={{ color: '#666', marginBottom: '20px', fontSize: '14px' }}>
+              This will permanently delete ALL data including orders, inventory, menu items, and other user accounts. Only your account will remain. Perfect for deployment setup.
+            </p>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#333' }}>
+                Enter your password to confirm:
+              </label>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Your account password"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e9ecef',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  outline: 'none'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#dc2626'}
+                onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
+              />
+            </div>
+            
+            {/* Message Display */}
+            {adminMessage && showResetDatabaseModal && (
+              <div style={{
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                backgroundColor: adminMessageType === 'success' ? '#f0fdf4' : '#fef2f2',
+                border: `1px solid ${adminMessageType === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                color: adminMessageType === 'success' ? '#16a34a' : '#dc2626',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}>
+                {adminMessage}
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowResetDatabaseModal(false);
+                  setAdminPassword('');
+                  setAdminMessage('');
+                }}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#f8f9fa',
+                  color: '#666',
+                  border: '1px solid #e9ecef',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetDatabase}
+                disabled={adminActionLoading}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#dc2626',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: adminActionLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  opacity: adminActionLoading ? 0.7 : 1
+                }}
+              >
+                {adminActionLoading ? 'Resetting...' : 'Reset Database'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Modal */}
+      {showDeleteAccountModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '400px',
+            width: '90%',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)'
+          }}>
+            <h3 style={{ color: '#374151', marginBottom: '16px', fontSize: '18px' }}>
+              🗑️ Delete My Account
+            </h3>
+            <p style={{ color: '#666', marginBottom: '20px', fontSize: '14px' }}>
+              This will permanently delete your account and log you out. This action cannot be undone.
+            </p>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#333' }}>
+                Enter your password to confirm:
+              </label>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Your account password"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e9ecef',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  outline: 'none'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#374151'}
+                onBlur={(e) => e.target.style.borderColor = '#e9ecef'}
+              />
+            </div>
+            
+            {/* Message Display */}
+            {adminMessage && showDeleteAccountModal && (
+              <div style={{
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                backgroundColor: adminMessageType === 'success' ? '#f0fdf4' : '#fef2f2',
+                border: `1px solid ${adminMessageType === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                color: adminMessageType === 'success' ? '#16a34a' : '#dc2626',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}>
+                {adminMessage}
+              </div>
+            )}
+            
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowDeleteAccountModal(false);
+                  setAdminPassword('');
+                  setAdminMessage('');
+                }}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#f8f9fa',
+                  color: '#666',
+                  border: '1px solid #e9ecef',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={adminActionLoading}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#374151',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: adminActionLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  opacity: adminActionLoading ? 0.7 : 1
+                }}
+              >
+                {adminActionLoading ? 'Deleting...' : 'Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

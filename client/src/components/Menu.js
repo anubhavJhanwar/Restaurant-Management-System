@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Plus, Upload, Download, Edit3, Trash2, Camera, X } from 'lucide-react';
+import { ShoppingCart, Plus, Upload, Download, Edit3, Trash2 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import io from 'socket.io-client';
@@ -187,8 +187,12 @@ const Menu = () => {
         formData.append('image', newMenuItem.image);
       }
 
+      const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:5000/api/menu', {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData,
       });
 
@@ -196,9 +200,15 @@ const Menu = () => {
         setShowAddModal(false);
         resetForm();
         fetchMenuItems();
+        alert('Recipe added successfully!');
+      } else {
+        const errorData = await response.json();
+        console.error('Add failed:', errorData);
+        alert('Failed to add recipe: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error adding menu item:', error);
+      alert('Error adding recipe: ' + error.message);
     }
   };
 
@@ -308,19 +318,27 @@ const Menu = () => {
 
   const uploadMenuItems = async (items) => {
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:5000/api/menu/bulk', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ items }),
       });
 
       if (response.ok) {
         fetchMenuItems();
+        alert('Recipes uploaded successfully!');
+      } else {
+        const errorData = await response.json();
+        console.error('Upload failed:', errorData);
+        alert('Failed to upload recipes: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error uploading menu items:', error);
+      alert('Error uploading recipes: ' + error.message);
     }
   };
 
@@ -381,8 +399,12 @@ const Menu = () => {
         formData.append('ingredients', JSON.stringify(newMenuItem.ingredients));
         formData.append('image', newMenuItem.image);
 
+        const token = localStorage.getItem('token');
         const response = await fetch(`http://localhost:5000/api/menu/${editingItem.id}`, {
           method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
           body: formData,
         });
 
@@ -395,14 +417,16 @@ const Menu = () => {
         } else {
           const errorData = await response.json();
           console.error('Update failed:', errorData);
-          alert('Failed to update menu item: ' + (errorData.error || 'Unknown error'));
+          alert('Failed to update recipe: ' + (errorData.error || 'Unknown error'));
         }
       } else {
         // If no image, use JSON
+        const token = localStorage.getItem('token');
         const response = await fetch(`http://localhost:5000/api/menu/${editingItem.id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
             name: newMenuItem.name.trim(),
@@ -421,26 +445,36 @@ const Menu = () => {
         } else {
           const errorData = await response.json();
           console.error('Update failed:', errorData);
-          alert('Failed to update menu item: ' + (errorData.error || 'Unknown error'));
+          alert('Failed to update recipe: ' + (errorData.error || 'Unknown error'));
         }
       }
     } catch (error) {
       console.error('Error updating menu item:', error);
-      alert('Error updating menu item: ' + error.message);
+      alert('Error updating recipe: ' + error.message);
     }
   };
 
   const deleteMenuItem = async (itemId) => {
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:5000/api/menu/${itemId}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
 
       if (response.ok) {
         fetchMenuItems();
+        alert('Recipe deleted successfully!');
+      } else {
+        const errorData = await response.json();
+        console.error('Delete failed:', errorData);
+        alert('Failed to delete recipe: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error deleting menu item:', error);
+      alert('Error deleting recipe: ' + error.message);
     }
   };
 
@@ -466,16 +500,28 @@ const Menu = () => {
           <button 
             onClick={downloadTemplate}
             style={{
-              backgroundColor: '#3b82f6',
+              background: 'linear-gradient(135deg, #ff8c42 0%, #ff6b1a 100%)',
               color: 'white',
               border: 'none',
-              padding: '8px 16px',
-              borderRadius: '6px',
+              padding: '10px 18px',
+              borderRadius: '8px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              fontSize: '14px'
+              gap: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              boxShadow: '0 4px 12px rgba(255, 140, 66, 0.3)',
+              transition: 'all 0.3s ease',
+              transform: 'translateY(0)'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 6px 16px rgba(255, 140, 66, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 4px 12px rgba(255, 140, 66, 0.3)';
             }}
           >
             <Download size={16} />
@@ -483,7 +529,30 @@ const Menu = () => {
           </button>
           <button 
             onClick={() => setShowAddModal(true)}
-            className="add-btn"
+            style={{
+              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+              color: 'white',
+              border: 'none',
+              padding: '10px 18px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '14px',
+              fontWeight: '600',
+              boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+              transition: 'all 0.3s ease',
+              transform: 'translateY(0)'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 6px 16px rgba(34, 197, 94, 0.4)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 4px 12px rgba(34, 197, 94, 0.3)';
+            }}
           >
             <Plus size={20} />
             Add Recipe
@@ -500,44 +569,50 @@ const Menu = () => {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
       }}>
         <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#33312E' }}>
-          Bulk Upload Menu Items & Recipes
+          Bulk Upload Recipes
         </h3>
         <div style={{ 
-          backgroundColor: '#fff7ed', 
+          backgroundColor: '#f0fdf4', 
           padding: '12px', 
           borderRadius: '8px', 
           marginBottom: '16px',
-          border: '1px solid #fed7aa'
+          border: '1px solid #bbf7d0'
         }}>
-          <div style={{ fontSize: '14px', color: '#ea580c', fontWeight: '500', marginBottom: '8px' }}>
+          <div style={{ fontSize: '14px', color: '#16a34a', fontWeight: '500', marginBottom: '8px' }}>
             📋 Example Recipe Format:
           </div>
-          <div style={{ fontSize: '12px', color: '#ea580c', fontFamily: 'monospace' }}>
+          <div style={{ fontSize: '12px', color: '#16a34a', fontFamily: 'monospace' }}>
             Classic Burger: 2 Beef Patty (pieces), 1 Burger Buns (pieces), 1 Cheese Slices (pieces), 0.05 Lettuce (kg)
           </div>
         </div>
         <div 
           {...getRootProps()} 
           style={{
-            border: '2px dashed #9C928C',
-            borderRadius: '8px',
+            background: isDragActive 
+              ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' 
+              : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+            border: 'none',
+            borderRadius: '12px',
             padding: '40px',
             textAlign: 'center',
             cursor: 'pointer',
-            backgroundColor: isDragActive ? '#f8f9fa' : 'transparent',
-            transition: 'background-color 0.2s'
+            transition: 'all 0.3s ease',
+            boxShadow: isDragActive 
+              ? '0 8px 20px rgba(34, 197, 94, 0.4)' 
+              : '0 4px 12px rgba(34, 197, 94, 0.3)',
+            transform: isDragActive ? 'translateY(-2px)' : 'translateY(0)'
           }}
         >
           <input {...getInputProps()} />
-          <Upload size={48} style={{ color: '#9C928C', marginBottom: '16px' }} />
+          <Upload size={48} style={{ color: 'white', marginBottom: '16px' }} />
           {isDragActive ? (
-            <p style={{ color: '#33312E', fontSize: '16px' }}>Drop the Excel file here...</p>
+            <p style={{ color: 'white', fontSize: '16px', fontWeight: '600' }}>Drop the Excel file here...</p>
           ) : (
             <div>
-              <p style={{ color: '#33312E', fontSize: '16px', marginBottom: '8px' }}>
+              <p style={{ color: 'white', fontSize: '16px', marginBottom: '8px', fontWeight: '600' }}>
                 Drag & drop an Excel file here, or click to select
               </p>
-              <p style={{ color: '#666', fontSize: '14px' }}>
+              <p style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: '14px' }}>
                 Supports .xlsx and .xls files. Download template for correct format.
               </p>
             </div>
@@ -723,7 +798,7 @@ const Menu = () => {
       {showAddModal && (
         <div className="modal-overlay">
           <div className="modal" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <h2 className="modal-title">Add New Menu Item & Recipe</h2>
+            <h2 className="modal-title">Add New Recipe</h2>
             <div style={{ 
               backgroundColor: '#f0f9ff', 
               padding: '12px', 
@@ -785,99 +860,7 @@ const Menu = () => {
                 </select>
               </div>
 
-              {/* Photo Upload Section */}
-              <div className="form-group">
-                <label className="form-label">Menu Item Photo</label>
-                <div style={{
-                  border: '2px dashed #ff8c42',
-                  borderRadius: '8px',
-                  padding: '20px',
-                  textAlign: 'center',
-                  backgroundColor: '#fff5f0',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
-                onClick={() => document.getElementById('photo-upload').click()}
-                >
-                  <input
-                    id="photo-upload"
-                    type="file"
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const file = e.target.files[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                          setNewMenuItem({
-                            ...newMenuItem,
-                            image: file,
-                            imagePreview: e.target.result
-                          });
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                  />
-                  
-                  {newMenuItem.imagePreview ? (
-                    <div style={{ position: 'relative' }}>
-                      <img 
-                        src={newMenuItem.imagePreview} 
-                        alt="Preview" 
-                        style={{
-                          width: '150px',
-                          height: '150px',
-                          objectFit: 'cover',
-                          borderRadius: '8px',
-                          marginBottom: '10px'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNewMenuItem({
-                            ...newMenuItem,
-                            image: null,
-                            imagePreview: null
-                          });
-                        }}
-                        style={{
-                          position: 'absolute',
-                          top: '5px',
-                          right: '5px',
-                          backgroundColor: '#ef4444',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '50%',
-                          width: '25px',
-                          height: '25px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        <X size={14} />
-                      </button>
-                      <div style={{ fontSize: '12px', color: '#666' }}>
-                        Click to change photo
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <Camera size={48} style={{ color: '#ff8c42', marginBottom: '10px' }} />
-                      <div style={{ color: '#ff8c42', fontWeight: '500', marginBottom: '5px' }}>
-                        Upload Menu Photo
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>
-                        Click to select an image (JPG, PNG, GIF)
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+
 
               {/* Burger Specific Ingredients */}
               {newMenuItem.category === 'Burger' && (
@@ -987,12 +970,24 @@ const Menu = () => {
                     type="button"
                     onClick={addIngredient}
                     style={{
-                      backgroundColor: '#9C928C',
+                      background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
                       color: 'white',
                       border: 'none',
                       padding: '8px 16px',
                       borderRadius: '6px',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      fontWeight: '600',
+                      boxShadow: '0 2px 8px rgba(34, 197, 94, 0.3)',
+                      transition: 'all 0.3s ease',
+                      transform: 'translateY(0)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.transform = 'translateY(-1px)';
+                      e.target.style.boxShadow = '0 4px 12px rgba(34, 197, 94, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0)';
+                      e.target.style.boxShadow = '0 2px 8px rgba(34, 197, 94, 0.3)';
                     }}
                   >
                     Add
@@ -1048,8 +1043,31 @@ const Menu = () => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary">
-                  Add Menu Item
+                <button 
+                  type="submit" 
+                  style={{
+                    background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                    color: 'white',
+                    border: 'none',
+                    padding: '12px 24px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+                    transition: 'all 0.3s ease',
+                    transform: 'translateY(0)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = 'translateY(-2px)';
+                    e.target.style.boxShadow = '0 6px 16px rgba(34, 197, 94, 0.4)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = '0 4px 12px rgba(34, 197, 94, 0.3)';
+                  }}
+                >
+                  Add Recipe
                 </button>
               </div>
             </form>
@@ -1073,7 +1091,7 @@ const Menu = () => {
                 ✏️ Edit Recipe & Ingredients
               </div>
               <div style={{ fontSize: '12px', color: '#1e40af' }}>
-                Update menu item details, buns, patty types, and ingredient quantities for better inventory management.
+                Update recipe details, buns, patty types, and ingredient quantities for better inventory management.
               </div>
             </div>
             
@@ -1200,7 +1218,7 @@ const Menu = () => {
                       type="button"
                       onClick={addIngredient}
                       style={{
-                        backgroundColor: '#ff8c42',
+                        background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
                         color: 'white',
                         border: 'none',
                         padding: '12px 20px',
@@ -1208,10 +1226,18 @@ const Menu = () => {
                         cursor: 'pointer',
                         fontWeight: '600',
                         fontSize: '14px',
-                        transition: 'background-color 0.3s ease'
+                        boxShadow: '0 4px 12px rgba(34, 197, 94, 0.3)',
+                        transition: 'all 0.3s ease',
+                        transform: 'translateY(0)'
                       }}
-                      onMouseEnter={(e) => e.target.style.backgroundColor = '#e67e22'}
-                      onMouseLeave={(e) => e.target.style.backgroundColor = '#ff8c42'}
+                      onMouseEnter={(e) => {
+                        e.target.style.transform = 'translateY(-1px)';
+                        e.target.style.boxShadow = '0 6px 16px rgba(34, 197, 94, 0.4)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.transform = 'translateY(0)';
+                        e.target.style.boxShadow = '0 4px 12px rgba(34, 197, 94, 0.3)';
+                      }}
                     >
                       Add
                     </button>
