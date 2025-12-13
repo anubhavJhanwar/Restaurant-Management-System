@@ -14,7 +14,7 @@ const app = express();
 // CORS configuration for Vercel
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-app-name.vercel.app'] // Replace with your actual Vercel URL
+    ? ['https://restaurant-management-system-sepla.vercel.app']
     : ['http://localhost:3000'],
   credentials: true
 }));
@@ -197,6 +197,106 @@ app.post('/api/auth/owner-login', (req, res) => {
         role: user.role,
         full_name: user.full_name
       }
+    });
+  });
+});
+
+// Staff login (Default accounts)
+app.post('/api/auth/staff-login', (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password are required' });
+  }
+
+  db.get("SELECT * FROM users WHERE username = ? AND role = 'Default'", [username], (err, user) => {
+    if (err) {
+      console.error('Database error:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (!user || !bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { 
+        id: user.id, 
+        username: user.username, 
+        role: user.role,
+        full_name: user.full_name 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        full_name: user.full_name
+      }
+    });
+  });
+});
+
+// Signup (Owner accounts)
+app.post('/api/auth/signup', (req, res) => {
+  const { username, email, password, fullName, pin } = req.body;
+  
+  if (!username || !email || !password || !fullName || !pin) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  // Check account limits
+  db.get("SELECT COUNT(*) as count FROM users WHERE role = 'Owner'", [], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (result.count >= 3) {
+      return res.status(400).json({ error: 'Maximum owner accounts (3) reached' });
+    }
+
+    // Check if username or email already exists
+    db.get("SELECT * FROM users WHERE username = ? OR email = ?", [username, email], (err, existingUser) => {
+      if (err) {
+        return res.status(500).json({ error: 'Database error' });
+      }
+
+      if (existingUser) {
+        return res.status(400).json({ error: 'Username or email already exists' });
+      }
+
+      // Create new owner account
+      const userId = uuidv4();
+      const hashedPassword = bcrypt.hashSync(password, 10);
+      const hashedPin = bcrypt.hashSync(pin, 10);
+
+      db.run(
+        "INSERT INTO users (id, username, email, password, role, full_name, pin) VALUES (?, ?, ?, ?, 'Owner', ?, ?)",
+        [userId, username, email, hashedPassword, fullName, hashedPin],
+        function(err) {
+          if (err) {
+            return res.status(500).json({ error: 'Failed to create account' });
+          }
+
+          res.json({
+            message: 'Account created successfully',
+            user: {
+              id: userId,
+              username,
+              email,
+              role: 'Owner',
+              full_name: fullName
+            }
+          });
+        }
+      );
     });
   });
 });
