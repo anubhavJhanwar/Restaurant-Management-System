@@ -1,275 +1,167 @@
+// Simple working API for BurgerBoss
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'burgerboss-secret-key';
+// In-memory data store
+let menuItems = [
+  {
+    id: '1',
+    name: 'Aloo Tikki Burger',
+    price: 80,
+    category: 'Burgers',
+    ingredients: ['Aloo Patty', 'Bun', 'Cheese Slice'],
+    active: true
+  },
+  {
+    id: '2',
+    name: 'Veg Burger',
+    price: 90,
+    category: 'Burgers', 
+    ingredients: ['Veg Patty', 'Bun', 'Cheese Slice'],
+    active: true
+  }
+];
 
-// Clean in-memory database - resets on each function call but works during session
-let database = {
-  users: [
-    {
-      id: '1',
-      username: 'demo',
-      email: 'demo@burgerboss.com',
-      password: bcrypt.hashSync('demo123', 10),
-      role: 'Owner',
-      full_name: 'Demo Owner',
-      pin: bcrypt.hashSync('1234', 10),
-      created_at: new Date().toISOString()
-    }
-  ],
-  menuItems: [
-    {
-      id: '1',
-      name: 'Aloo Tikki Burger',
-      price: 80,
-      category: 'Burgers',
-      ingredients: ['Aloo Patty', 'Bun', 'Cheese Slice'],
-      active: true,
-      created_at: new Date().toISOString()
-    },
-    {
-      id: '2',
-      name: 'Veg Burger', 
-      price: 90,
-      category: 'Burgers',
-      ingredients: ['Veg Patty', 'Bun', 'Cheese Slice'],
-      active: true,
-      created_at: new Date().toISOString()
-    }
-  ],
-  inventory: [
-    { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces', low_stock_threshold: 10 },
-    { id: '2', name: 'Buns', quantity: 100, unit: 'pieces', low_stock_threshold: 20 },
-    { id: '3', name: 'Cheese Slices', quantity: 80, unit: 'pieces', low_stock_threshold: 15 },
-    { id: '4', name: 'Veg Patty', quantity: 30, unit: 'pieces', low_stock_threshold: 10 },
-    { id: '5', name: 'Paneer Patty', quantity: 25, unit: 'pieces', low_stock_threshold: 10 }
-  ],
-  orders: [],
-  expenditures: []
-};
+let inventory = [
+  { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces' },
+  { id: '2', name: 'Buns', quantity: 100, unit: 'pieces' },
+  { id: '3', name: 'Cheese Slices', quantity: 80, unit: 'pieces' }
+];
 
-export default function handler(req, res) {
-  // Set CORS headers
+let expenditures = [];
+
+module.exports = (req, res) => {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  const { url, method, body } = req;
-  
+  const { url, method } = req;
+
   try {
-    // Route handling
+    // Test endpoint
     if (url === '/api/test') {
-      return res.json({ message: 'API Working!', timestamp: new Date().toISOString() });
+      return res.json({ message: 'API Working!' });
     }
 
-    // AUTH ROUTES
+    // Auth endpoint
     if (url === '/api/auth' && method === 'POST') {
-      const { username, password } = body;
+      const { username, password } = req.body;
       
-      if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password required' });
+      if (username === 'demo' && password === 'demo123') {
+        const token = jwt.sign(
+          { id: '1', username: 'demo', role: 'Owner' },
+          'secret',
+          { expiresIn: '24h' }
+        );
+        
+        return res.json({
+          message: 'Login successful',
+          token,
+          user: { id: '1', username: 'demo', role: 'Owner', full_name: 'Demo User' }
+        });
       }
-
-      const user = database.users.find(u => u.username === username);
       
-      if (!user || !bcrypt.compareSync(password, user.password)) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-
-      const token = jwt.sign(
-        { id: user.id, username: user.username, role: user.role, full_name: user.full_name },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
-
-      return res.json({
-        message: 'Login successful',
-        token,
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          role: user.role,
-          full_name: user.full_name
-        }
-      });
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // MENU ROUTES
+    // Menu endpoints
     if (url === '/api/menu') {
       if (method === 'GET') {
-        return res.json(database.menuItems);
+        return res.json(menuItems);
       }
       
       if (method === 'POST') {
-        const { name, price, category, ingredients, items } = body;
+        const { name, price, category, ingredients, items } = req.body;
         
-        // Bulk upload
+        // Handle bulk upload
         if (items && Array.isArray(items)) {
-          const newItems = items.map(item => ({
-            id: uuidv4(),
-            name: item.name,
-            price: parseFloat(item.price) || 0,
-            category: item.category || 'Burgers',
-            ingredients: Array.isArray(item.ingredients) 
-              ? item.ingredients 
-              : (item.ingredients || '').split(',').map(i => i.trim()).filter(i => i),
-            active: true,
-            created_at: new Date().toISOString()
-          }));
-          
-          database.menuItems.push(...newItems);
-          return res.json({ message: `${newItems.length} items added successfully`, count: newItems.length });
+          items.forEach(item => {
+            menuItems.push({
+              id: uuidv4(),
+              name: item.name,
+              price: parseFloat(item.price),
+              category: item.category || 'Burgers',
+              ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
+              active: true
+            });
+          });
+          return res.json({ message: `${items.length} items added` });
         }
         
-        // Single item
+        // Handle single item
         if (name && price) {
-          const newItem = {
+          menuItems.push({
             id: uuidv4(),
             name,
             price: parseFloat(price),
             category: category || 'Burgers',
-            ingredients: Array.isArray(ingredients) 
-              ? ingredients 
-              : (ingredients || '').split(',').map(i => i.trim()).filter(i => i),
-            active: true,
-            created_at: new Date().toISOString()
-          };
-          
-          database.menuItems.push(newItem);
-          return res.json({ message: 'Menu item added successfully', item: newItem });
+            ingredients: Array.isArray(ingredients) ? ingredients : [],
+            active: true
+          });
+          return res.json({ message: 'Item added successfully' });
         }
         
-        return res.status(400).json({ error: 'Name and price required' });
-      }
-      
-      if (method === 'DELETE') {
-        const { id } = req.query;
-        const index = database.menuItems.findIndex(item => item.id === id);
-        
-        if (index === -1) {
-          return res.status(404).json({ error: 'Item not found' });
-        }
-        
-        database.menuItems.splice(index, 1);
-        return res.json({ message: 'Item deleted successfully' });
+        return res.status(400).json({ error: 'Invalid data' });
       }
     }
 
-    // INVENTORY ROUTES
+    // Inventory endpoints
     if (url === '/api/inventory') {
       if (method === 'GET') {
-        return res.json(database.inventory);
+        return res.json(inventory);
       }
       
       if (method === 'POST') {
-        const { name, quantity, unit, low_stock_threshold } = body;
+        const { name, quantity, unit } = req.body;
         
-        if (!name || quantity === undefined || !unit) {
-          return res.status(400).json({ error: 'Name, quantity, and unit required' });
+        if (name && quantity && unit) {
+          inventory.push({
+            id: uuidv4(),
+            name,
+            quantity: parseFloat(quantity),
+            unit
+          });
+          return res.json({ message: 'Inventory item added' });
         }
         
-        const newItem = {
-          id: uuidv4(),
-          name,
-          quantity: parseFloat(quantity),
-          unit,
-          low_stock_threshold: parseFloat(low_stock_threshold) || 10,
-          created_at: new Date().toISOString()
-        };
-        
-        database.inventory.push(newItem);
-        return res.json({ message: 'Inventory item added successfully', item: newItem });
-      }
-      
-      if (method === 'DELETE') {
-        const { id } = req.query;
-        const index = database.inventory.findIndex(item => item.id === id);
-        
-        if (index === -1) {
-          return res.status(404).json({ error: 'Item not found' });
-        }
-        
-        database.inventory.splice(index, 1);
-        return res.json({ message: 'Item deleted successfully' });
+        return res.status(400).json({ error: 'Invalid data' });
       }
     }
 
-    // EXPENDITURE ROUTES
+    // Expenditures endpoints
     if (url === '/api/expenditures') {
       if (method === 'GET') {
-        return res.json(database.expenditures);
+        return res.json(expenditures);
       }
       
       if (method === 'POST') {
-        const { description, amount, category, supplier } = body;
+        const { description, amount, category } = req.body;
         
-        if (!description || !amount || !category) {
-          return res.status(400).json({ error: 'Description, amount, and category required' });
+        if (description && amount && category) {
+          expenditures.push({
+            id: uuidv4(),
+            description,
+            amount: parseFloat(amount),
+            category,
+            created_at: new Date().toISOString()
+          });
+          return res.json({ message: 'Expenditure added' });
         }
         
-        const newExpenditure = {
-          id: uuidv4(),
-          description,
-          amount: parseFloat(amount),
-          category,
-          supplier: supplier || '',
-          payment_status: 'pending',
-          created_at: new Date().toISOString()
-        };
-        
-        database.expenditures.push(newExpenditure);
-        return res.json({ message: 'Expenditure added successfully', expenditure: newExpenditure });
-      }
-      
-      if (method === 'DELETE') {
-        const { id } = req.query;
-        const index = database.expenditures.findIndex(item => item.id === id);
-        
-        if (index === -1) {
-          return res.status(404).json({ error: 'Expenditure not found' });
-        }
-        
-        database.expenditures.splice(index, 1);
-        return res.json({ message: 'Expenditure deleted successfully' });
+        return res.status(400).json({ error: 'Invalid data' });
       }
     }
 
-    // ORDERS ROUTES
-    if (url === '/api/orders' || url === '/api/orders/today') {
-      if (method === 'GET') {
-        if (url === '/api/orders/today') {
-          const today = new Date().toDateString();
-          const todayOrders = database.orders.filter(order => 
-            new Date(order.created_at).toDateString() === today
-          );
-          return res.json(todayOrders);
-        }
-        return res.json(database.orders);
-      }
-      
-      if (method === 'POST') {
-        const newOrder = {
-          id: uuidv4(),
-          ...body,
-          created_at: new Date().toISOString()
-        };
-        
-        database.orders.push(newOrder);
-        return res.json({ message: 'Order created successfully', order: newOrder });
-      }
-    }
-
-    // Default response
-    return res.status(404).json({ error: 'Endpoint not found' });
+    return res.status(404).json({ error: 'Not found' });
     
   } catch (error) {
-    console.error('API Error:', error);
-    return res.status(500).json({ error: 'Internal server error', details: error.message });
+    console.error('Error:', error);
+    return res.status(500).json({ error: 'Server error' });
   }
-}
+};
