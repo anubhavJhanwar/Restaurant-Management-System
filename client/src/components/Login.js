@@ -73,7 +73,7 @@ const Login = ({ onLogin }) => {
     }
 
     try {
-      const result = await authService.signup({
+      await authService.signup({
         username: formData.username,
         password: formData.password,
         full_name: formData.full_name || formData.username,

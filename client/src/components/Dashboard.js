@@ -15,12 +15,9 @@ const Dashboard = () => {
   const [todayTopProducts, setTodayTopProducts] = useState([]);
   const [ingredientConsumption, setIngredientConsumption] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
-  const [socket, setSocket] = useState(null);
-
   useEffect(() => {
     // Initialize socket connection
     const newSocket = io('http://localhost:5000');
-    setSocket(newSocket);
 
     // Fetch initial data
     fetchDashboardStats();

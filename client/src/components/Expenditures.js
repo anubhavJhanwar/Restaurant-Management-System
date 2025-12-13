@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, DollarSign, Calendar, CheckCircle, XCircle, Edit3, Trash2 } from 'lucide-react';
+import { Plus, DollarSign, Calendar, CheckCircle, XCircle, Trash2 } from 'lucide-react';
 import io from 'socket.io-client';
 import PinVerification from './PinVerification';
 
 const Expenditures = () => {
   const [expenditures, setExpenditures] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [socket, setSocket] = useState(null);
   const [newExpenditure, setNewExpenditure] = useState({
     description: '',
     amount: '',
