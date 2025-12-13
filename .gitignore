@@ -109,5 +109,14 @@ Thumbs.db
 *.lnk
 
 # Package lock files (keep only one)
-package-lock.json
 yarn.lock
+
+# Vercel
+.vercel
+.vercel.json
+
+# Uploads directory (for production, use cloud storage)
+uploads/
+
+# Local database (use cloud database in production)
+restaurant.db

@@ -8,7 +8,9 @@
     "server": "nodemon server.js",
     "client": "cd client && npm start",
     "build": "cd client && npm run build",
-    "start": "node server.js"
+    "start": "node server.js",
+    "vercel-build": "cd client && npm install && npm run build",
+    "deploy": "vercel --prod"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
