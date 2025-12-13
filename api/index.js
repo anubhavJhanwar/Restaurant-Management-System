@@ -1,35 +1,54 @@
-// Simple working API for BurgerBoss
+// Working API for BurgerBoss with persistent storage simulation
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 
-// In-memory data store
-let menuItems = [
-  {
-    id: '1',
-    name: 'Aloo Tikki Burger',
-    price: 80,
-    category: 'Burgers',
-    ingredients: ['Aloo Patty', 'Bun', 'Cheese Slice'],
-    active: true
-  },
-  {
-    id: '2',
-    name: 'Veg Burger',
-    price: 90,
-    category: 'Burgers', 
-    ingredients: ['Veg Patty', 'Bun', 'Cheese Slice'],
-    active: true
-  }
-];
+// Global storage that persists across requests (Vercel limitation workaround)
+global.burgerbossData = global.burgerbossData || {
+  menuItems: [
+    {
+      id: '1',
+      name: 'Aloo Tikki Burger',
+      price: 80,
+      category: 'Burgers',
+      ingredients: [
+        { name: 'Aloo Patty', quantity: 1, unit: 'pieces' },
+        { name: 'Bun', quantity: 1, unit: 'pieces' },
+        { name: 'Cheese Slice', quantity: 1, unit: 'pieces' }
+      ],
+      active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: '2',
+      name: 'Veg Burger',
+      price: 90,
+      category: 'Burgers',
+      ingredients: [
+        { name: 'Veg Patty', quantity: 1, unit: 'pieces' },
+        { name: 'Bun', quantity: 1, unit: 'pieces' },
+        { name: 'Cheese Slice', quantity: 1, unit: 'pieces' }
+      ],
+      active: true,
+      created_at: new Date().toISOString()
+    }
+  ],
+  inventory: [
+    { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces', low_stock_threshold: 10 },
+    { id: '2', name: 'Buns', quantity: 100, unit: 'pieces', low_stock_threshold: 20 },
+    { id: '3', name: 'Cheese Slices', quantity: 80, unit: 'pieces', low_stock_threshold: 15 },
+    { id: '4', name: 'Veg Patty', quantity: 30, unit: 'pieces', low_stock_threshold: 10 },
+    { id: '5', name: 'Paneer Patty', quantity: 25, unit: 'pieces', low_stock_threshold: 10 }
+  ],
+  expenditures: [],
+  orders: []
+};
 
-let inventory = [
-  { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces' },
-  { id: '2', name: 'Buns', quantity: 100, unit: 'pieces' },
-  { id: '3', name: 'Cheese Slices', quantity: 80, unit: 'pieces' }
-];
-
-let expenditures = [];
+// Get data references
+const menuItems = global.burgerbossData.menuItems;
+const inventory = global.burgerbossData.inventory;
+const expenditures = global.burgerbossData.expenditures;
+const orders = global.burgerbossData.orders;
 
 module.exports = (req, res) => {
   // CORS
@@ -77,37 +96,106 @@ module.exports = (req, res) => {
       }
       
       if (method === 'POST') {
-        const { name, price, category, ingredients, items } = req.body;
+        const { name, price, category, ingredients, items, buns, patties, additionalIngredients } = req.body;
         
         // Handle bulk upload
         if (items && Array.isArray(items)) {
           items.forEach(item => {
+            const newIngredients = [];
+            
+            // Process ingredients properly
+            if (Array.isArray(item.ingredients)) {
+              item.ingredients.forEach(ing => {
+                if (typeof ing === 'string') {
+                  newIngredients.push({ name: ing, quantity: 1, unit: 'pieces' });
+                } else {
+                  newIngredients.push(ing);
+                }
+              });
+            }
+            
             menuItems.push({
               id: uuidv4(),
               name: item.name,
               price: parseFloat(item.price),
               category: item.category || 'Burgers',
-              ingredients: Array.isArray(item.ingredients) ? item.ingredients : [],
-              active: true
+              ingredients: newIngredients,
+              active: true,
+              created_at: new Date().toISOString()
             });
           });
-          return res.json({ message: `${items.length} items added` });
+          return res.json({ message: `${items.length} items added successfully`, count: items.length });
         }
         
-        // Handle single item
+        // Handle single item (manual add recipe)
         if (name && price) {
-          menuItems.push({
+          const newIngredients = [];
+          
+          // Add buns
+          if (buns && parseInt(buns) > 0) {
+            newIngredients.push({ name: 'Bun', quantity: parseInt(buns), unit: 'pieces' });
+          }
+          
+          // Add patties
+          if (patties && patties.type && parseInt(patties.quantity) > 0) {
+            newIngredients.push({ 
+              name: patties.type, 
+              quantity: parseInt(patties.quantity), 
+              unit: 'pieces' 
+            });
+          }
+          
+          // Add additional ingredients
+          if (additionalIngredients && Array.isArray(additionalIngredients)) {
+            additionalIngredients.forEach(ing => {
+              if (ing.name && ing.quantity) {
+                newIngredients.push({
+                  name: ing.name,
+                  quantity: parseFloat(ing.quantity),
+                  unit: ing.unit || 'pieces'
+                });
+              }
+            });
+          }
+          
+          // Fallback for simple ingredients array
+          if (ingredients && Array.isArray(ingredients)) {
+            ingredients.forEach(ing => {
+              if (typeof ing === 'string') {
+                newIngredients.push({ name: ing, quantity: 1, unit: 'pieces' });
+              } else {
+                newIngredients.push(ing);
+              }
+            });
+          }
+          
+          const newItem = {
             id: uuidv4(),
             name,
             price: parseFloat(price),
             category: category || 'Burgers',
-            ingredients: Array.isArray(ingredients) ? ingredients : [],
-            active: true
-          });
-          return res.json({ message: 'Item added successfully' });
+            ingredients: newIngredients,
+            active: true,
+            created_at: new Date().toISOString()
+          };
+          
+          menuItems.push(newItem);
+          return res.json({ message: 'Menu item added successfully', item: newItem });
         }
         
-        return res.status(400).json({ error: 'Invalid data' });
+        return res.status(400).json({ error: 'Name and price are required' });
+      }
+      
+      if (method === 'DELETE') {
+        const { id } = req.query;
+        const index = menuItems.findIndex(item => item.id === id);
+        
+        if (index !== -1) {
+          menuItems.splice(index, 1);
+          return res.json({ message: 'Item deleted successfully' });
+        }
+        
+        return res.status(404).json({ error: 'Item not found' });
       }
     }
 
@@ -143,20 +231,37 @@ module.exports = (req, res) => {
       if (method === 'POST') {
         const { description, amount, category, supplier } = req.body;
         
-        if (description && amount && category) {
-          expenditures.push({
-            id: uuidv4(),
-            description,
-            amount: parseFloat(amount),
-            category,
-            supplier: supplier || '',
-            payment_status: 'pending',
-            created_at: new Date().toISOString()
-          });
-          return res.json({ message: 'Expenditure added successfully' });
+        if (!description || !amount || !category) {
+          return res.status(400).json({ error: 'Description, amount, and category are required' });
         }
         
-        return res.status(400).json({ error: 'Description, amount, and category required' });
+        const newExpenditure = {
+          id: uuidv4(),
+          description: description.trim(),
+          amount: parseFloat(amount),
+          category: category.trim(),
+          supplier: supplier ? supplier.trim() : '',
+          payment_status: 'pending',
+          created_at: new Date().toISOString()
+        };
+        
+        expenditures.push(newExpenditure);
+        return res.json({ 
+          message: 'Expenditure added successfully',
+          expenditure: newExpenditure
+        });
+      }
+      
+      if (method === 'DELETE') {
+        const { id } = req.query;
+        const index = expenditures.findIndex(exp => exp.id === id);
+        
+        if (index !== -1) {
+          expenditures.splice(index, 1);
+          return res.json({ message: 'Expenditure deleted successfully' });
+        }
+        
+        return res.status(404).json({ error: 'Expenditure not found' });
       }
     }
 
