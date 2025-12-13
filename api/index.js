@@ -36,11 +36,18 @@ module.exports = async (req, res) => {
     
     // ==================== HEALTH CHECK ====================
     if (url === '/api/test' || url === '/api') {
+      const firebaseConfig = require('./firebase-config');
       return res.json({ 
         message: 'BurgerBoss API - Firebase Ready!', 
         timestamp: new Date().toISOString(),
-        firebase_connected: require('./firebase-config').isConnected(),
-        environment: process.env.NODE_ENV || 'development'
+        firebase_connected: firebaseConfig.isConnected(),
+        environment: process.env.NODE_ENV || 'development',
+        credentials_check: {
+          hasProjectId: !!process.env.FIREBASE_PROJECT_ID,
+          hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+          hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+          projectId: process.env.FIREBASE_PROJECT_ID || 'missing'
+        }
       });
     }
 
