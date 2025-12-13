@@ -37,7 +37,15 @@ This guide will help you deploy BurgerBoss to Vercel for production use.
 
 ### Step 1: Prepare Your Repository
 ```bash
-# Make sure all changes are committed and pushed
+# Run the deployment preparation script
+chmod +x deploy.sh
+./deploy.sh
+
+# Or manually:
+npm install
+cd client && npm install && npm run build && cd ..
+
+# Commit and push all changes
 git add .
 git commit -m "Prepare for Vercel deployment"
 git push origin main
@@ -55,20 +63,24 @@ git push origin main
 
 3. **Configure Project Settings**
    - **Project Name**: `burgerboss-restaurant` (or your preferred name)
-   - **Framework Preset**: Other
+   - **Framework Preset**: Other (Vercel will auto-detect React)
    - **Root Directory**: `./` (leave as default)
+   - **Build Command**: Leave empty (uses vercel.json config)
+   - **Output Directory**: Leave empty (uses vercel.json config)
 
 4. **Environment Variables** (CRITICAL)
    Click "Environment Variables" and add:
    ```
-   JWT_SECRET=your-super-secure-jwt-secret-key-here
+   JWT_SECRET=your-super-secure-jwt-secret-key-here-make-it-long-and-random
    NODE_ENV=production
-   DATABASE_URL=your-database-connection-string
    ```
+   
+   **Note**: For production, you should use a cloud database instead of SQLite.
 
 5. **Deploy**
    - Click "Deploy"
-   - Wait for deployment to complete (2-3 minutes)
+   - Wait for deployment to complete (3-5 minutes)
+   - Vercel will build both the React client and Node.js API
 
 ### Step 3: Update CORS Configuration
 
