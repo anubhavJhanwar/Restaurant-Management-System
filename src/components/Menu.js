@@ -47,20 +47,30 @@ const Menu = () => {
   const fetchMenuItems = async () => {
     try {
       const response = await fetch('/api/menu');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
-      setMenuItems(data);
+      console.log('Menu data received:', data);
+      setMenuItems(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching menu items:', error);
+      setMenuItems([]); // Set empty array on error
     }
   };
 
   const fetchInventory = async () => {
     try {
       const response = await fetch('/api/inventory');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
-      setInventory(data);
+      console.log('Inventory data received:', data);
+      setInventory(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching inventory:', error);
+      setInventory([]); // Set empty array on error
     }
   };
 

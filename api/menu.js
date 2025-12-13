@@ -1,10 +1,9 @@
 // Menu API endpoint for Vercel
 export default function handler(req, res) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Origin', 'https://restaurant-management-system-sepla.vercel.app');
+  // Enable CORS for all origins (for demo)
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -18,16 +17,27 @@ export default function handler(req, res) {
       name: 'Aloo Tikki Burger',
       price: 80,
       category: 'Burgers',
-      ingredients: 'Aloo Patty, Bun, Cheese Slice',
-      active: true
+      ingredients: ['Aloo Patty', 'Bun', 'Cheese Slice'],
+      active: true,
+      created_at: new Date().toISOString()
     },
     {
       id: '2', 
       name: 'Veg Burger',
       price: 90,
       category: 'Burgers',
-      ingredients: 'Veg Patty, Bun, Cheese Slice',
-      active: true
+      ingredients: ['Veg Patty', 'Bun', 'Cheese Slice'],
+      active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: '3',
+      name: 'Paneer Burger',
+      price: 100,
+      category: 'Burgers', 
+      ingredients: ['Paneer Patty', 'Bun', 'Cheese Slice'],
+      active: true,
+      created_at: new Date().toISOString()
     }
   ];
 
