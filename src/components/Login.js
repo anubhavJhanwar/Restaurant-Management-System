@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, Lock, Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
+import config from '../config';
 
 const Login = ({ onLogin }) => {
   const [currentView, setCurrentView] = useState('signin'); // 'signin' or 'signup'
@@ -41,7 +42,7 @@ const Login = ({ onLogin }) => {
 
     try {
       // Try owner login first, then default login
-      let response = await fetch('http://localhost:5000/api/auth/owner-login', {
+      let response = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -52,7 +53,7 @@ const Login = ({ onLogin }) => {
 
       if (!response.ok) {
         // Try default login if owner login fails
-        response = await fetch('http://localhost:5000/api/auth/default-login', {
+        response = await fetch('/api/auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -106,7 +107,7 @@ const Login = ({ onLogin }) => {
 
     try {
       const endpoint = accountType === 'owner' ? 'signup-owner' : 'signup-default';
-      const response = await fetch(`http://localhost:5000/api/auth/${endpoint}`, {
+      const response = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
