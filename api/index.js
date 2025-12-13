@@ -35,11 +35,12 @@ module.exports = async (req, res) => {
   try {
     
     // ==================== HEALTH CHECK ====================
-    if (url === '/api/test') {
+    if (url === '/api/test' || url === '/api') {
       return res.json({ 
         message: 'BurgerBoss API - Firebase Ready!', 
         timestamp: new Date().toISOString(),
-        firebase_connected: require('./firebase-config').isConnected()
+        firebase_connected: require('./firebase-config').isConnected(),
+        environment: process.env.NODE_ENV || 'development'
       });
     }
 
