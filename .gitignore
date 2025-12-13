@@ -119,3 +119,9 @@ uploads/
 
 # Local database (use cloud database in production)
 restaurant.db
+
+# Firebase credentials (NEVER commit these!)
+firebase-service-account.json
+*firebase*.json
+serviceAccountKey.json
+firebase-adminsdk-*.json

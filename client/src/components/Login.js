@@ -1,22 +1,24 @@
 import React, { useState } from 'react';
 import { User, Lock, Eye, EyeOff, LogIn, UserPlus } from 'lucide-react';
+import authService from '../services/authService';
 
 const Login = ({ onLogin }) => {
   const [currentView, setCurrentView] = useState('signin'); // 'signin' or 'signup'
-  const [accountType, setAccountType] = useState('owner'); // 'owner' or 'default'
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     password: '',
-    email: '',
+    full_name: '',
     pin: ''
   });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const resetForm = () => {
-    setFormData({ username: '', password: '', email: '', pin: '' });
+    setFormData({ username: '', password: '', full_name: '', pin: '' });
     setError('');
+    setSuccess('');
     setShowPassword(false);
   };
 
@@ -26,6 +28,7 @@ const Login = ({ onLogin }) => {
       [e.target.name]: e.target.value
     });
     setError('');
+    setSuccess('');
   };
 
   const handleSignIn = async (e) => {
@@ -40,40 +43,13 @@ const Login = ({ onLogin }) => {
     }
 
     try {
-      // Try owner login first, then default login
-      let response = await fetch('http://localhost:5000/api/auth/owner-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: formData.username,
-          password: formData.password
-        }),
-      });
-
-      if (!response.ok) {
-        // Try default login if owner login fails
-        response = await fetch('http://localhost:5000/api/auth/default-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: formData.username,
-            password: formData.password
-          }),
-        });
-      }
-
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        onLogin(data.user);
-      } else {
-        setError(data.error || 'Invalid credentials');
-      }
+      const result = await authService.login(formData.username, formData.password);
+      
+      console.log('✅ Login successful:', result.user);
+      onLogin(result.user);
+      
     } catch (error) {
-      console.error('Login error:', error);
-      setError('Network error. Please try again.');
+      setError(error.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -84,48 +60,32 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
 
-    // Validate based on account type
-    if (accountType === 'owner') {
-      if (!formData.username || !formData.email || !formData.password || !formData.pin) {
-        setError('All fields are required for Owner account');
-        setLoading(false);
-        return;
-      }
-      if (formData.pin.length !== 4 || !/^\d{4}$/.test(formData.pin)) {
-        setError('PIN must be exactly 4 digits');
-        setLoading(false);
-        return;
-      }
-    } else {
-      if (!formData.username || !formData.password) {
-        setError('Username and password are required for Default account');
-        setLoading(false);
-        return;
-      }
+    if (!formData.username || !formData.password || !formData.pin) {
+      setError('Username, password, and PIN required');
+      setLoading(false);
+      return;
+    }
+
+    if (formData.pin.length !== 4) {
+      setError('PIN must be 4 digits');
+      setLoading(false);
+      return;
     }
 
     try {
-      const endpoint = accountType === 'owner' ? 'signup-owner' : 'signup-default';
-      const response = await fetch(`http://localhost:5000/api/auth/${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+      const result = await authService.signup({
+        username: formData.username,
+        password: formData.password,
+        full_name: formData.full_name || formData.username,
+        pin: formData.pin
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Don't auto-login, just show success and go back to signin
-        setError('');
-        alert(`${accountType === 'owner' ? 'Owner' : 'Default'} account created successfully! Please sign in.`);
-        setCurrentView('signin');
-        resetForm();
-      } else {
-        setError(data.error || 'Signup failed');
-      }
+      
+      setSuccess('Account created successfully! Please sign in.');
+      setCurrentView('signin');
+      resetForm();
+      
     } catch (error) {
-      console.error('Signup error:', error);
-      setError('Network error. Please try again.');
+      setError(error.message || 'Account creation failed');
     } finally {
       setLoading(false);
     }
@@ -182,7 +142,7 @@ const Login = ({ onLogin }) => {
               BurgerBoss
             </h1>
             <p style={{ margin: '8px 0 0 0', opacity: 0.95, fontSize: '14px', fontWeight: '400' }}>
-              Restaurant Management System
+              Firebase Edition - Restaurant Management
             </p>
           </div>
         </div>
@@ -200,6 +160,20 @@ const Login = ({ onLogin }) => {
               textAlign: 'center'
             }}>
               {error}
+            </div>
+          )}
+
+          {success && (
+            <div style={{
+              backgroundColor: '#d1fae5',
+              color: '#065f46',
+              padding: '12px',
+              borderRadius: '8px',
+              marginBottom: '20px',
+              fontSize: '14px',
+              textAlign: 'center'
+            }}>
+              {success}
             </div>
           )}
 
@@ -248,7 +222,8 @@ const Login = ({ onLogin }) => {
                       fontSize: '14px',
                       outline: 'none',
                       transition: 'all 0.3s ease',
-                      backgroundColor: '#fafafa'
+                      backgroundColor: '#fafafa',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => {
                       e.target.style.borderColor = '#ff8c42';
@@ -294,7 +269,8 @@ const Login = ({ onLogin }) => {
                       fontSize: '14px',
                       outline: 'none',
                       transition: 'all 0.3s ease',
-                      backgroundColor: '#fafafa'
+                      backgroundColor: '#fafafa',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => {
                       e.target.style.borderColor = '#ff8c42';
@@ -407,47 +383,8 @@ const Login = ({ onLogin }) => {
                   color: '#374151',
                   margin: 0
                 }}>
-                  Create Account
+                  Create Owner Account
                 </h2>
-              </div>
-
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{
-                  display: 'block',
-                  marginBottom: '8px',
-                  fontWeight: '600',
-                  color: '#374151'
-                }}>
-                  Account Type
-                </label>
-                <select
-                  value={accountType}
-                  onChange={(e) => {
-                    setAccountType(e.target.value);
-                    setFormData({ ...formData, email: '', pin: '' });
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '14px',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '10px',
-                    fontSize: '14px',
-                    outline: 'none',
-                    transition: 'all 0.3s ease',
-                    backgroundColor: '#fafafa'
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#ff8c42';
-                    e.target.style.backgroundColor = 'white';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#e2e8f0';
-                    e.target.style.backgroundColor = '#fafafa';
-                  }}
-                >
-                  <option value="owner">Owner Account (with PIN) - Max 3</option>
-                  <option value="default">Default Account (no PIN) - Max 2</option>
-                </select>
               </div>
 
               <div style={{ marginBottom: '20px' }}>
@@ -482,7 +419,8 @@ const Login = ({ onLogin }) => {
                       fontSize: '14px',
                       outline: 'none',
                       transition: 'all 0.3s ease',
-                      backgroundColor: '#fafafa'
+                      backgroundColor: '#fafafa',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => {
                       e.target.style.borderColor = '#ff8c42';
@@ -496,46 +434,44 @@ const Login = ({ onLogin }) => {
                 </div>
               </div>
 
-              {accountType === 'owner' && (
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontWeight: '600',
-                    color: '#374151'
-                  }}>
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    placeholder="Enter email address"
-                    required={accountType === 'owner'}
-                    style={{
-                      width: '100%',
-                      padding: '14px',
-                      border: '2px solid #e2e8f0',
-                      borderRadius: '10px',
-                      fontSize: '14px',
-                      outline: 'none',
-                      transition: 'all 0.3s ease',
-                      backgroundColor: '#fafafa'
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = '#ff8c42';
-                      e.target.style.backgroundColor = 'white';
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = '#e2e8f0';
-                      e.target.style.backgroundColor = '#fafafa';
-                    }}
-                  />
-                </div>
-              )}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151'
+                }}>
+                  Full Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  name="full_name"
+                  value={formData.full_name}
+                  onChange={handleInputChange}
+                  placeholder="Enter full name"
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'all 0.3s ease',
+                    backgroundColor: '#fafafa',
+                    boxSizing: 'border-box'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#ff8c42';
+                    e.target.style.backgroundColor = 'white';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#e2e8f0';
+                    e.target.style.backgroundColor = '#fafafa';
+                  }}
+                />
+              </div>
 
-              <div style={{ marginBottom: accountType === 'owner' ? '20px' : '25px' }}>
+              <div style={{ marginBottom: '20px' }}>
                 <label style={{
                   display: 'block',
                   marginBottom: '8px',
@@ -567,7 +503,8 @@ const Login = ({ onLogin }) => {
                       fontSize: '14px',
                       outline: 'none',
                       transition: 'all 0.3s ease',
-                      backgroundColor: '#fafafa'
+                      backgroundColor: '#fafafa',
+                      boxSizing: 'border-box'
                     }}
                     onFocus={(e) => {
                       e.target.style.borderColor = '#ff8c42';
@@ -598,55 +535,54 @@ const Login = ({ onLogin }) => {
                 </div>
               </div>
 
-              {accountType === 'owner' && (
-                <div style={{ marginBottom: '25px' }}>
-                  <label style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontWeight: '600',
-                    color: '#374151'
-                  }}>
-                    Set Your PIN (4 digits)
-                  </label>
-                  <input
-                    type="password"
-                    name="pin"
-                    value={formData.pin}
-                    onChange={handleInputChange}
-                    placeholder="Enter 4-digit PIN"
-                    maxLength={4}
-                    required={accountType === 'owner'}
-                    style={{
-                      width: '100%',
-                      padding: '14px',
-                      border: '2px solid #e2e8f0',
-                      borderRadius: '10px',
-                      fontSize: '14px',
-                      outline: 'none',
-                      transition: 'all 0.3s ease',
-                      backgroundColor: '#fafafa',
-                      letterSpacing: '2px',
-                      textAlign: 'center'
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = '#ff8c42';
-                      e.target.style.backgroundColor = 'white';
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = '#e2e8f0';
-                      e.target.style.backgroundColor = '#fafafa';
-                    }}
-                  />
-                  <div style={{
-                    fontSize: '12px',
-                    color: '#64748b',
-                    marginTop: '6px',
-                    textAlign: 'center'
-                  }}>
-                    This PIN will be used for secure operations
-                  </div>
+              <div style={{ marginBottom: '25px' }}>
+                <label style={{
+                  display: 'block',
+                  marginBottom: '8px',
+                  fontWeight: '600',
+                  color: '#374151'
+                }}>
+                  Set Your PIN (4 digits)
+                </label>
+                <input
+                  type="password"
+                  name="pin"
+                  value={formData.pin}
+                  onChange={handleInputChange}
+                  placeholder="Enter 4-digit PIN"
+                  maxLength={4}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '10px',
+                    fontSize: '14px',
+                    outline: 'none',
+                    transition: 'all 0.3s ease',
+                    backgroundColor: '#fafafa',
+                    letterSpacing: '2px',
+                    textAlign: 'center',
+                    boxSizing: 'border-box'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#ff8c42';
+                    e.target.style.backgroundColor = 'white';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#e2e8f0';
+                    e.target.style.backgroundColor = '#fafafa';
+                  }}
+                />
+                <div style={{
+                  fontSize: '12px',
+                  color: '#64748b',
+                  marginTop: '6px',
+                  textAlign: 'center'
+                }}>
+                  This PIN will be used for secure operations
                 </div>
-              )}
+              </div>
 
               <button
                 type="submit"
@@ -677,7 +613,7 @@ const Login = ({ onLogin }) => {
                 {loading ? 'Creating Account...' : (
                   <>
                     <UserPlus size={20} />
-                    Create {accountType === 'owner' ? 'Owner' : 'Default'} Account
+                    Create Owner Account
                   </>
                 )}
               </button>
@@ -687,6 +623,9 @@ const Login = ({ onLogin }) => {
       </div>
     </div>
   );
+};
+
+export default Login;
 };
 
 export default Login;
