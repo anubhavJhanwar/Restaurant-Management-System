@@ -158,6 +158,17 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'API is working!' });
+});
+
+// Handle all API routes
+app.all('/api/*', (req, res, next) => {
+  console.log(`API Request: ${req.method} ${req.url}`);
+  next();
+});
+
 // Authentication routes
 app.post('/api/auth/owner-login', (req, res) => {
   const { username, password } = req.body;
@@ -338,5 +349,7 @@ app.get('/api/dashboard/stats', authenticateToken, (req, res) => {
   });
 });
 
-// Export the Express app for Vercel
-module.exports = app;
+// Export handler function for Vercel
+module.exports = (req, res) => {
+  return app(req, res);
+};
