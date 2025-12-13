@@ -1,10 +1,8 @@
-// Working API for BurgerBoss with persistent storage simulation
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+// Simple working API for BurgerBoss
 const { v4: uuidv4 } = require('uuid');
 
-// Global storage that persists across requests (Vercel limitation workaround)
-global.burgerbossData = global.burgerbossData || {
+// Simple in-memory storage (resets on function restart but works during session)
+let data = {
   menuItems: [
     {
       id: '1',
@@ -16,8 +14,7 @@ global.burgerbossData = global.burgerbossData || {
         { name: 'Bun', quantity: 1, unit: 'pieces' },
         { name: 'Cheese Slice', quantity: 1, unit: 'pieces' }
       ],
-      active: true,
-      created_at: new Date().toISOString()
+      active: true
     },
     {
       id: '2',
@@ -29,26 +26,18 @@ global.burgerbossData = global.burgerbossData || {
         { name: 'Bun', quantity: 1, unit: 'pieces' },
         { name: 'Cheese Slice', quantity: 1, unit: 'pieces' }
       ],
-      active: true,
-      created_at: new Date().toISOString()
+      active: true
     }
   ],
   inventory: [
-    { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces', low_stock_threshold: 10 },
-    { id: '2', name: 'Buns', quantity: 100, unit: 'pieces', low_stock_threshold: 20 },
-    { id: '3', name: 'Cheese Slices', quantity: 80, unit: 'pieces', low_stock_threshold: 15 },
-    { id: '4', name: 'Veg Patty', quantity: 30, unit: 'pieces', low_stock_threshold: 10 },
-    { id: '5', name: 'Paneer Patty', quantity: 25, unit: 'pieces', low_stock_threshold: 10 }
+    { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces' },
+    { id: '2', name: 'Buns', quantity: 100, unit: 'pieces' },
+    { id: '3', name: 'Cheese Slices', quantity: 80, unit: 'pieces' },
+    { id: '4', name: 'Veg Patty', quantity: 30, unit: 'pieces' },
+    { id: '5', name: 'Paneer Patty', quantity: 25, unit: 'pieces' }
   ],
-  expenditures: [],
-  orders: []
+  expenditures: []
 };
-
-// Get data references
-const menuItems = global.burgerbossData.menuItems;
-const inventory = global.burgerbossData.inventory;
-const expenditures = global.burgerbossData.expenditures;
-const orders = global.burgerbossData.orders;
 
 module.exports = (req, res) => {
   // CORS
@@ -60,7 +49,9 @@ module.exports = (req, res) => {
     return res.status(200).end();
   }
 
-  const { url, method } = req;
+  const { url, method, body } = req;
+  
+  console.log('API Request:', method, url, body); // Debug logging
 
   try {
     // Test endpoint
@@ -70,18 +61,12 @@ module.exports = (req, res) => {
 
     // Auth endpoint
     if (url === '/api/auth' && method === 'POST') {
-      const { username, password } = req.body;
+      const { username, password } = body || {};
       
       if (username === 'demo' && password === 'demo123') {
-        const token = jwt.sign(
-          { id: '1', username: 'demo', role: 'Owner' },
-          'secret',
-          { expiresIn: '24h' }
-        );
-        
         return res.json({
           message: 'Login successful',
-          token,
+          token: 'demo-token',
           user: { id: '1', username: 'demo', role: 'Owner', full_name: 'Demo User' }
         });
       }
@@ -92,176 +77,108 @@ module.exports = (req, res) => {
     // Menu endpoints
     if (url === '/api/menu') {
       if (method === 'GET') {
-        return res.json(menuItems);
+        return res.json(data.menuItems);
       }
       
       if (method === 'POST') {
-        const { name, price, category, ingredients, items, buns, patties, additionalIngredients } = req.body;
+        console.log('Menu POST body:', body); // Debug
+        
+        const { name, price, category, ingredients, items } = body || {};
         
         // Handle bulk upload
         if (items && Array.isArray(items)) {
           items.forEach(item => {
-            const newIngredients = [];
-            
-            // Process ingredients properly
-            if (Array.isArray(item.ingredients)) {
-              item.ingredients.forEach(ing => {
-                if (typeof ing === 'string') {
-                  newIngredients.push({ name: ing, quantity: 1, unit: 'pieces' });
-                } else {
-                  newIngredients.push(ing);
-                }
-              });
-            }
-            
-            menuItems.push({
+            data.menuItems.push({
               id: uuidv4(),
               name: item.name,
-              price: parseFloat(item.price),
+              price: parseFloat(item.price) || 0,
               category: item.category || 'Burgers',
-              ingredients: newIngredients,
-              active: true,
-              created_at: new Date().toISOString()
+              ingredients: [
+                { name: 'Bun', quantity: 1, unit: 'pieces' },
+                { name: item.name + ' Patty', quantity: 1, unit: 'pieces' }
+              ],
+              active: true
             });
           });
-          return res.json({ message: `${items.length} items added successfully`, count: items.length });
+          return res.json({ message: `${items.length} items added successfully` });
         }
         
-        // Handle single item (manual add recipe)
+        // Handle single item
         if (name && price) {
-          const newIngredients = [];
-          
-          // Add buns
-          if (buns && parseInt(buns) > 0) {
-            newIngredients.push({ name: 'Bun', quantity: parseInt(buns), unit: 'pieces' });
-          }
-          
-          // Add patties
-          if (patties && patties.type && parseInt(patties.quantity) > 0) {
-            newIngredients.push({ 
-              name: patties.type, 
-              quantity: parseInt(patties.quantity), 
-              unit: 'pieces' 
-            });
-          }
-          
-          // Add additional ingredients
-          if (additionalIngredients && Array.isArray(additionalIngredients)) {
-            additionalIngredients.forEach(ing => {
-              if (ing.name && ing.quantity) {
-                newIngredients.push({
-                  name: ing.name,
-                  quantity: parseFloat(ing.quantity),
-                  unit: ing.unit || 'pieces'
-                });
-              }
-            });
-          }
-          
-          // Fallback for simple ingredients array
-          if (ingredients && Array.isArray(ingredients)) {
-            ingredients.forEach(ing => {
-              if (typeof ing === 'string') {
-                newIngredients.push({ name: ing, quantity: 1, unit: 'pieces' });
-              } else {
-                newIngredients.push(ing);
-              }
-            });
-          }
-          
           const newItem = {
             id: uuidv4(),
-            name,
+            name: name,
             price: parseFloat(price),
             category: category || 'Burgers',
-            ingredients: newIngredients,
-            active: true,
-            created_at: new Date().toISOString()
+            ingredients: [
+              { name: 'Bun', quantity: 1, unit: 'pieces' },
+              { name: name + ' Patty', quantity: 1, unit: 'pieces' }
+            ],
+            active: true
           };
           
-          menuItems.push(newItem);
+          data.menuItems.push(newItem);
           return res.json({ message: 'Menu item added successfully', item: newItem });
         }
         
-        return res.status(400).json({ error: 'Name and price are required' });
-      }
-      
-      if (method === 'DELETE') {
-        const { id } = req.query;
-        const index = menuItems.findIndex(item => item.id === id);
-        
-        if (index !== -1) {
-          menuItems.splice(index, 1);
-          return res.json({ message: 'Item deleted successfully' });
-        }
-        
-        return res.status(404).json({ error: 'Item not found' });
+        return res.status(400).json({ error: 'Name and price required' });
       }
     }
 
     // Inventory endpoints
     if (url === '/api/inventory') {
       if (method === 'GET') {
-        return res.json(inventory);
+        return res.json(data.inventory);
       }
       
       if (method === 'POST') {
-        const { name, quantity, unit } = req.body;
+        const { name, quantity, unit } = body || {};
         
         if (name && quantity && unit) {
-          inventory.push({
+          data.inventory.push({
             id: uuidv4(),
             name,
             quantity: parseFloat(quantity),
-            unit
+            unit,
+            low_stock_threshold: 10
           });
-          return res.json({ message: 'Inventory item added' });
+          return res.json({ message: 'Inventory item added successfully' });
         }
         
-        return res.status(400).json({ error: 'Invalid data' });
+        return res.status(400).json({ error: 'Name, quantity, and unit required' });
       }
     }
 
     // Expenditures endpoints
     if (url === '/api/expenditures') {
       if (method === 'GET') {
-        return res.json(expenditures);
+        return res.json(data.expenditures);
       }
       
       if (method === 'POST') {
-        const { description, amount, category, supplier } = req.body;
+        console.log('Expenditure POST body:', body); // Debug
         
-        if (!description || !amount || !category) {
-          return res.status(400).json({ error: 'Description, amount, and category are required' });
+        const { description, amount, category, supplier } = body || {};
+        
+        if (description && amount && category) {
+          const newExpenditure = {
+            id: uuidv4(),
+            description,
+            amount: parseFloat(amount),
+            category,
+            supplier: supplier || '',
+            payment_status: 'pending',
+            created_at: new Date().toISOString()
+          };
+          
+          data.expenditures.push(newExpenditure);
+          return res.json({ 
+            message: 'Expenditure added successfully',
+            expenditure: newExpenditure
+          });
         }
         
-        const newExpenditure = {
-          id: uuidv4(),
-          description: description.trim(),
-          amount: parseFloat(amount),
-          category: category.trim(),
-          supplier: supplier ? supplier.trim() : '',
-          payment_status: 'pending',
-          created_at: new Date().toISOString()
-        };
-        
-        expenditures.push(newExpenditure);
-        return res.json({ 
-          message: 'Expenditure added successfully',
-          expenditure: newExpenditure
-        });
-      }
-      
-      if (method === 'DELETE') {
-        const { id } = req.query;
-        const index = expenditures.findIndex(exp => exp.id === id);
-        
-        if (index !== -1) {
-          expenditures.splice(index, 1);
-          return res.json({ message: 'Expenditure deleted successfully' });
-        }
-        
-        return res.status(404).json({ error: 'Expenditure not found' });
+        return res.status(400).json({ error: 'Description, amount, and category required' });
       }
     }
 
