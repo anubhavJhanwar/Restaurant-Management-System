@@ -1,265 +1,275 @@
-// Main API handler for BurgerBoss - handles all endpoints
-const express = require('express');
-const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 
-const app = express();
+const JWT_SECRET = process.env.JWT_SECRET || 'burgerboss-secret-key';
 
-// Enable CORS
-app.use(cors({
-  origin: '*',
-  credentials: true
-}));
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secure-jwt-secret-key-for-production';
-
-// In-memory storage
-let users = [
-  {
-    id: '1',
-    username: 'demo',
-    email: 'demo@burgerboss.com',
-    password: bcrypt.hashSync('demo123', 10),
-    role: 'Owner',
-    full_name: 'Demo Owner',
-    pin: bcrypt.hashSync('1234', 10)
-  }
-];
-
-let menuItems = [
-  {
-    id: '1',
-    name: 'Aloo Tikki Burger',
-    price: 80,
-    category: 'Burgers',
-    ingredients: ['Aloo Patty', 'Bun', 'Cheese Slice'],
-    active: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: '2', 
-    name: 'Veg Burger',
-    price: 90,
-    category: 'Burgers',
-    ingredients: ['Veg Patty', 'Bun', 'Cheese Slice'],
-    active: true,
-    created_at: new Date().toISOString()
-  }
-];
-
-let inventory = [
-  { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces', low_stock_threshold: 10 },
-  { id: '2', name: 'Buns', quantity: 100, unit: 'pieces', low_stock_threshold: 20 },
-  { id: '3', name: 'Cheese Slices', quantity: 80, unit: 'pieces', low_stock_threshold: 15 },
-  { id: '4', name: 'Veg Patty', quantity: 30, unit: 'pieces', low_stock_threshold: 10 },
-  { id: '5', name: 'Paneer Patty', quantity: 25, unit: 'pieces', low_stock_threshold: 10 }
-];
-
-let orders = [];
-let expenditures = [];
-
-// Middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
+// Clean in-memory database - resets on each function call but works during session
+let database = {
+  users: [
+    {
+      id: '1',
+      username: 'demo',
+      email: 'demo@burgerboss.com',
+      password: bcrypt.hashSync('demo123', 10),
+      role: 'Owner',
+      full_name: 'Demo Owner',
+      pin: bcrypt.hashSync('1234', 10),
+      created_at: new Date().toISOString()
     }
-    req.user = user;
-    next();
-  });
+  ],
+  menuItems: [
+    {
+      id: '1',
+      name: 'Aloo Tikki Burger',
+      price: 80,
+      category: 'Burgers',
+      ingredients: ['Aloo Patty', 'Bun', 'Cheese Slice'],
+      active: true,
+      created_at: new Date().toISOString()
+    },
+    {
+      id: '2',
+      name: 'Veg Burger', 
+      price: 90,
+      category: 'Burgers',
+      ingredients: ['Veg Patty', 'Bun', 'Cheese Slice'],
+      active: true,
+      created_at: new Date().toISOString()
+    }
+  ],
+  inventory: [
+    { id: '1', name: 'Aloo Patty', quantity: 50, unit: 'pieces', low_stock_threshold: 10 },
+    { id: '2', name: 'Buns', quantity: 100, unit: 'pieces', low_stock_threshold: 20 },
+    { id: '3', name: 'Cheese Slices', quantity: 80, unit: 'pieces', low_stock_threshold: 15 },
+    { id: '4', name: 'Veg Patty', quantity: 30, unit: 'pieces', low_stock_threshold: 10 },
+    { id: '5', name: 'Paneer Patty', quantity: 25, unit: 'pieces', low_stock_threshold: 10 }
+  ],
+  orders: [],
+  expenditures: []
 };
 
-// Routes
-app.get('/api/test', (req, res) => {
-  res.json({ message: 'API is working!', timestamp: new Date().toISOString() });
-});
-
-// Auth routes
-app.post('/api/auth', (req, res) => {
-  const { username, password } = req.body;
+export default function handler(req, res) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password are required' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
 
-  const user = users.find(u => u.username === username);
-  
-  if (!user || !bcrypt.compareSync(password, user.password)) {
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-
-  const token = jwt.sign(
-    { 
-      id: user.id, 
-      username: user.username, 
-      role: user.role,
-      full_name: user.full_name 
-    },
-    JWT_SECRET,
-    { expiresIn: '24h' }
-  );
-
-  res.json({
-    message: 'Login successful',
-    token,
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      full_name: user.full_name
-    }
-  });
-});
-
-// Menu routes
-app.get('/api/menu', (req, res) => {
-  res.json(menuItems);
-});
-
-app.post('/api/menu', (req, res) => {
-  const { name, price, category, ingredients, items } = req.body;
+  const { url, method, body } = req;
   
   try {
-    // Handle bulk upload
-    if (items && Array.isArray(items)) {
-      items.forEach(item => {
+    // Route handling
+    if (url === '/api/test') {
+      return res.json({ message: 'API Working!', timestamp: new Date().toISOString() });
+    }
+
+    // AUTH ROUTES
+    if (url === '/api/auth' && method === 'POST') {
+      const { username, password } = body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password required' });
+      }
+
+      const user = database.users.find(u => u.username === username);
+      
+      if (!user || !bcrypt.compareSync(password, user.password)) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+
+      const token = jwt.sign(
+        { id: user.id, username: user.username, role: user.role, full_name: user.full_name },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      return res.json({
+        message: 'Login successful',
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          full_name: user.full_name
+        }
+      });
+    }
+
+    // MENU ROUTES
+    if (url === '/api/menu') {
+      if (method === 'GET') {
+        return res.json(database.menuItems);
+      }
+      
+      if (method === 'POST') {
+        const { name, price, category, ingredients, items } = body;
+        
+        // Bulk upload
+        if (items && Array.isArray(items)) {
+          const newItems = items.map(item => ({
+            id: uuidv4(),
+            name: item.name,
+            price: parseFloat(item.price) || 0,
+            category: item.category || 'Burgers',
+            ingredients: Array.isArray(item.ingredients) 
+              ? item.ingredients 
+              : (item.ingredients || '').split(',').map(i => i.trim()).filter(i => i),
+            active: true,
+            created_at: new Date().toISOString()
+          }));
+          
+          database.menuItems.push(...newItems);
+          return res.json({ message: `${newItems.length} items added successfully`, count: newItems.length });
+        }
+        
+        // Single item
+        if (name && price) {
+          const newItem = {
+            id: uuidv4(),
+            name,
+            price: parseFloat(price),
+            category: category || 'Burgers',
+            ingredients: Array.isArray(ingredients) 
+              ? ingredients 
+              : (ingredients || '').split(',').map(i => i.trim()).filter(i => i),
+            active: true,
+            created_at: new Date().toISOString()
+          };
+          
+          database.menuItems.push(newItem);
+          return res.json({ message: 'Menu item added successfully', item: newItem });
+        }
+        
+        return res.status(400).json({ error: 'Name and price required' });
+      }
+      
+      if (method === 'DELETE') {
+        const { id } = req.query;
+        const index = database.menuItems.findIndex(item => item.id === id);
+        
+        if (index === -1) {
+          return res.status(404).json({ error: 'Item not found' });
+        }
+        
+        database.menuItems.splice(index, 1);
+        return res.json({ message: 'Item deleted successfully' });
+      }
+    }
+
+    // INVENTORY ROUTES
+    if (url === '/api/inventory') {
+      if (method === 'GET') {
+        return res.json(database.inventory);
+      }
+      
+      if (method === 'POST') {
+        const { name, quantity, unit, low_stock_threshold } = body;
+        
+        if (!name || quantity === undefined || !unit) {
+          return res.status(400).json({ error: 'Name, quantity, and unit required' });
+        }
+        
         const newItem = {
           id: uuidv4(),
-          name: item.name,
-          price: parseFloat(item.price),
-          category: item.category || 'Burgers',
-          ingredients: Array.isArray(item.ingredients) ? item.ingredients : item.ingredients.split(',').map(i => i.trim()),
-          active: true,
+          name,
+          quantity: parseFloat(quantity),
+          unit,
+          low_stock_threshold: parseFloat(low_stock_threshold) || 10,
           created_at: new Date().toISOString()
         };
-        menuItems.push(newItem);
-      });
+        
+        database.inventory.push(newItem);
+        return res.json({ message: 'Inventory item added successfully', item: newItem });
+      }
       
-      return res.json({ 
-        message: `${items.length} menu items uploaded successfully`,
-        count: items.length
-      });
+      if (method === 'DELETE') {
+        const { id } = req.query;
+        const index = database.inventory.findIndex(item => item.id === id);
+        
+        if (index === -1) {
+          return res.status(404).json({ error: 'Item not found' });
+        }
+        
+        database.inventory.splice(index, 1);
+        return res.json({ message: 'Item deleted successfully' });
+      }
     }
-    
-    // Handle single item
-    if (name && price) {
-      const newItem = {
-        id: uuidv4(),
-        name,
-        price: parseFloat(price),
-        category: category || 'Burgers',
-        ingredients: Array.isArray(ingredients) ? ingredients : ingredients.split(',').map(i => i.trim()),
-        active: true,
-        created_at: new Date().toISOString()
-      };
+
+    // EXPENDITURE ROUTES
+    if (url === '/api/expenditures') {
+      if (method === 'GET') {
+        return res.json(database.expenditures);
+      }
       
-      menuItems.push(newItem);
+      if (method === 'POST') {
+        const { description, amount, category, supplier } = body;
+        
+        if (!description || !amount || !category) {
+          return res.status(400).json({ error: 'Description, amount, and category required' });
+        }
+        
+        const newExpenditure = {
+          id: uuidv4(),
+          description,
+          amount: parseFloat(amount),
+          category,
+          supplier: supplier || '',
+          payment_status: 'pending',
+          created_at: new Date().toISOString()
+        };
+        
+        database.expenditures.push(newExpenditure);
+        return res.json({ message: 'Expenditure added successfully', expenditure: newExpenditure });
+      }
       
-      return res.json({ 
-        message: 'Menu item added successfully',
-        item: newItem
-      });
+      if (method === 'DELETE') {
+        const { id } = req.query;
+        const index = database.expenditures.findIndex(item => item.id === id);
+        
+        if (index === -1) {
+          return res.status(404).json({ error: 'Expenditure not found' });
+        }
+        
+        database.expenditures.splice(index, 1);
+        return res.json({ message: 'Expenditure deleted successfully' });
+      }
     }
+
+    // ORDERS ROUTES
+    if (url === '/api/orders' || url === '/api/orders/today') {
+      if (method === 'GET') {
+        if (url === '/api/orders/today') {
+          const today = new Date().toDateString();
+          const todayOrders = database.orders.filter(order => 
+            new Date(order.created_at).toDateString() === today
+          );
+          return res.json(todayOrders);
+        }
+        return res.json(database.orders);
+      }
+      
+      if (method === 'POST') {
+        const newOrder = {
+          id: uuidv4(),
+          ...body,
+          created_at: new Date().toISOString()
+        };
+        
+        database.orders.push(newOrder);
+        return res.json({ message: 'Order created successfully', order: newOrder });
+      }
+    }
+
+    // Default response
+    return res.status(404).json({ error: 'Endpoint not found' });
     
-    return res.status(400).json({ error: 'Invalid data provided' });
   } catch (error) {
-    console.error('Menu error:', error);
-    return res.status(500).json({ error: 'Server error' });
+    console.error('API Error:', error);
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
-});
-
-// Inventory routes
-app.get('/api/inventory', (req, res) => {
-  res.json(inventory);
-});
-
-app.post('/api/inventory', (req, res) => {
-  const { name, quantity, unit, low_stock_threshold } = req.body;
-  
-  if (!name || !quantity || !unit) {
-    return res.status(400).json({ error: 'Name, quantity, and unit are required' });
-  }
-  
-  const newItem = {
-    id: uuidv4(),
-    name,
-    quantity: parseFloat(quantity),
-    unit,
-    low_stock_threshold: parseFloat(low_stock_threshold) || 10,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  };
-  
-  inventory.push(newItem);
-  
-  return res.json({ 
-    message: 'Inventory item added successfully',
-    item: newItem
-  });
-});
-
-// Orders routes
-app.get('/api/orders', (req, res) => {
-  res.json(orders);
-});
-
-app.get('/api/orders/today', (req, res) => {
-  const today = new Date().toDateString();
-  const todayOrders = orders.filter(order => 
-    new Date(order.created_at).toDateString() === today
-  );
-  res.json(todayOrders);
-});
-
-app.post('/api/orders', (req, res) => {
-  const newOrder = {
-    id: uuidv4(),
-    ...req.body,
-    created_at: new Date().toISOString()
-  };
-  
-  orders.push(newOrder);
-  
-  res.json({ 
-    message: 'Order created successfully',
-    order: newOrder
-  });
-});
-
-// Expenditures routes
-app.get('/api/expenditures', (req, res) => {
-  res.json(expenditures);
-});
-
-app.post('/api/expenditures', (req, res) => {
-  const newExpenditure = {
-    id: uuidv4(),
-    ...req.body,
-    created_at: new Date().toISOString()
-  };
-  
-  expenditures.push(newExpenditure);
-  
-  res.json({ 
-    message: 'Expenditure added successfully',
-    expenditure: newExpenditure
-  });
-});
-
-// Export for Vercel
-module.exports = (req, res) => {
-  return app(req, res);
-};
+}
