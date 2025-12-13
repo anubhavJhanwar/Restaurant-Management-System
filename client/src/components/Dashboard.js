@@ -204,12 +204,7 @@ const Dashboard = () => {
             </p>
           </div>
         </div>
-        <div className="user-info">
-          <div className="user-avatar">BB</div>
-          <div>
-            <div style={{ fontWeight: '600' }}>Burger Boss</div>
-          </div>
-        </div>
+
       </div>
 
       <div className="stats-grid">
