@@ -30,18 +30,18 @@ const Menu = () => {
     fetchMenuItems();
     fetchInventory();
 
-    // Listen for real-time updates
-    const socket = io('http://localhost:5000');
+    // Listen for real-time updates (disabled for Vercel demo)
+    // const socket = io('http://localhost:5000');
     
-    socket.on('menu_updated', () => {
-      fetchMenuItems();
-    });
+    // socket.on('menu_updated', () => {
+    //   fetchMenuItems();
+    // });
 
-    socket.on('inventory_updated', () => {
-      fetchInventory();
-    });
+    // socket.on('inventory_updated', () => {
+    //   fetchInventory();
+    // });
 
-    return () => socket.close();
+    // return () => socket.close();
   }, []);
 
   const fetchMenuItems = async () => {
@@ -111,7 +111,7 @@ const Menu = () => {
         total_amount: selectedItem.price * orderQuantity
       };
 
-      const response = await fetch('http://localhost:5000/api/orders', {
+      const response = await fetch('/api/orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -400,7 +400,7 @@ const Menu = () => {
         formData.append('image', newMenuItem.image);
 
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:5000/api/menu/${editingItem.id}`, {
+        const response = await fetch(`/api/menu`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -422,7 +422,7 @@ const Menu = () => {
       } else {
         // If no image, use JSON
         const token = localStorage.getItem('token');
-        const response = await fetch(`http://localhost:5000/api/menu/${editingItem.id}`, {
+        const response = await fetch(`/api/menu`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -457,7 +457,7 @@ const Menu = () => {
   const deleteMenuItem = async (itemId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/menu/${itemId}`, {
+      const response = await fetch(`/api/menu`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
