@@ -46,7 +46,7 @@ const Menu = () => {
 
   const fetchMenuItems = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/menu');
+      const response = await fetch('/api/menu');
       const data = await response.json();
       setMenuItems(data);
     } catch (error) {
@@ -56,7 +56,7 @@ const Menu = () => {
 
   const fetchInventory = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/inventory');
+      const response = await fetch('/api/inventory');
       const data = await response.json();
       setInventory(data);
     } catch (error) {
@@ -188,7 +188,7 @@ const Menu = () => {
       }
 
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/menu', {
+      const response = await fetch('/api/menu', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -319,7 +319,7 @@ const Menu = () => {
   const uploadMenuItems = async (items) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/menu/bulk', {
+      const response = await fetch('/api/menu', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
